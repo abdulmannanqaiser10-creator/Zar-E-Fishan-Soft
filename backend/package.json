@@ -1,0 +1,33 @@
+{
+  "name": "zar-e-fishan-backend",
+  "version": "1.0.0",
+  "description": "Zar-E-Fishan Interior Design ERP API",
+  "type": "module",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js",
+    "seed": "node src/seed.js"
+  },
+  "keywords": ["erp", "interior-design", "zar-e-fishan"],
+  "author": "Zar-E-Fishan",
+  "license": "ISC",
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.6",
+    "dotenv": "^18.0.10",
+    "exceljs": "^4.4.0",
+    "express": "^5.3.0",
+    "express-validator": "^7.3.2",
+    "helmet": "^8.3.0",
+    "jsonwebtoken": "^9.0.3",
+    "mongoose": "^9.12.2",
+    "morgan": "^1.12.1",
+    "multer": "^2.5.0",
+    "pdfkit": "^0.21.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.14"
+  }
+}
