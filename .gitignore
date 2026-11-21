@@ -8,6 +8,9 @@ node_modules/
 .env.*.local
 backend/.env
 frontend/.env
+.atlas-ephemeral.txt
+.atlas-claim-url.txt
+.vercel
 
 # Builds
 dist/
@@ -33,3 +36,6 @@ coverage/
 
 # OS
 Desktop.ini
+
+.vercel
+.env*

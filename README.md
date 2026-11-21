@@ -80,6 +80,31 @@ Base URL: `http://localhost:5001/api`
 
 Protected routes require `Authorization: Bearer <token>`.
 
+## Production (Vercel)
+
+Live app: **https://zar-e-fishan-soft.vercel.app**
+
+Account: [abdulmannanqaiser10-8796](https://vercel.com/abdulmannanqaiser10-8796)
+
+The monorepo deploys with Vercel Services (`vercel.json`): Vite frontend + Express API on the same domain (`/api/*` → backend).
+
+Required Vercel environment variables:
+
+| Variable | Notes |
+|----------|--------|
+| `MONGODB_URI` | MongoDB Atlas connection string |
+| `JWT_SECRET` | Strong random secret |
+| `JWT_EXPIRE` | e.g. `7d` |
+| `CLIENT_URL` | Production site URL |
+| `VITE_API_URL` | `/api` (same-origin) |
+| `NODE_ENV` | `production` |
+
+Redeploy:
+
+```bash
+vercel deploy --prod --yes
+```
+
 ## Scripts
 
 | Location | Command        | Purpose                |
