@@ -186,12 +186,12 @@ export default function Projects() {
       key: 'name',
       label: 'Project',
       render: (row) => (
-        <div>
+        <Link to={`/projects/${row._id}`} style={{ display: 'block' }}>
           <strong style={{ color: 'var(--olive)' }}>{row.name}</strong>
           {row.location && (
             <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{row.location}</div>
           )}
-        </div>
+        </Link>
       ),
     },
     {

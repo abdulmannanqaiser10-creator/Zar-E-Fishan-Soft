@@ -121,6 +121,7 @@ export const erpAPI = {
     }),
   deleteProjectMedia: (id, mediaId) => api.delete(`/erp/projects/${id}/media/${mediaId}`),
   addProjectExpense: (id, d) => api.post(`/erp/projects/${id}/expenses`, d),
+  deleteProjectExpense: (id, expenseId) => api.delete(`/erp/projects/${id}/expenses/${expenseId}`),
   pendingPayments: () => api.get('/erp/pending-payments'),
   cashFlow: (p) => api.get('/erp/reports/cash-flow', { params: p }),
   balanceSheet: () => api.get('/erp/reports/balance-sheet'),

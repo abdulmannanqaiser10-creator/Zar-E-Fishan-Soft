@@ -1,13 +1,15 @@
+import mongoose from 'mongoose';
 import Project from '../models/Project.js';
 import Transaction from '../models/Transaction.js';
+import Invoice from '../models/Invoice.js';
 import Activity from '../models/Activity.js';
 import Settings from '../models/Settings.js';
 import AppError from '../utils/AppError.js';
 import asyncHandler from '../utils/asyncHandler.js';
 import { logActivity } from '../services/activityService.js';
 import { getNextSequence, formatDocNumber } from '../services/sequenceService.js';
-import { refreshProjectFinance } from '../services/balanceService.js';
-import { ensureNonNegative } from '../utils/calculations.js';
+import { refreshProjectFinance, refreshClientBalances } from '../services/balanceService.js';
+import { ensureNonNegative, roundMoney } from '../utils/calculations.js';
 
 export const getProjects = asyncHandler(async (req, res) => {
   const { search, status, client, page = 1, limit = 20 } = req.query;
@@ -37,20 +39,54 @@ export const getProjects = asyncHandler(async (req, res) => {
 });
 
 export const getProject = asyncHandler(async (req, res) => {
+  if (!mongoose.isValidObjectId(req.params.id)) {
+    throw new AppError('Invalid project id', 400);
+  }
   const project = await Project.findById(req.params.id).populate('client');
   if (!project) throw new AppError('Project not found', 404);
 
   await refreshProjectFinance(project._id);
-  const refreshed = await Project.findById(project._id).populate('client');
+  const refreshed = await Project.findById(project._id)
+    .populate('client')
+    .populate('projectExpenses.account', 'name type');
 
-  const [transactions, activities] = await Promise.all([
+  const [transactions, invoices, activities] = await Promise.all([
     Transaction.find({ project: project._id }).sort({ date: -1 }),
-    Activity.find({ entityId: project._id }).sort({ createdAt: -1 }).limit(50).populate('user', 'name'),
+    Invoice.find({ project: project._id, status: { $ne: 'cancelled' } })
+      .populate('client', 'name')
+      .sort({ createdAt: -1 }),
+    Activity.find({ entityId: project._id }).sort({ createdAt: -1 }).limit(80).populate('user', 'name'),
   ]);
+
+  const payments = transactions.filter((t) => t.type === 'income');
+  const expenses = transactions.filter((t) => t.type === 'expense');
+  const invoiceTotal = roundMoney(invoices.reduce((s, i) => s + (i.total || 0), 0));
+  const invoicePaid = roundMoney(invoices.reduce((s, i) => s + (i.paidAmount || 0), 0));
+  const invoicePending = roundMoney(invoices.reduce((s, i) => s + (i.remainingBalance || 0), 0));
+  const budgetRemaining = roundMoney(Math.max(0, (refreshed.budget || 0) - (refreshed.totalExpenses || 0)));
 
   res.json({
     success: true,
-    data: { ...refreshed.toObject(), transactions, activities },
+    data: {
+      ...refreshed.toObject(),
+      transactions,
+      invoices,
+      activities,
+      summary: {
+        budget: refreshed.budget || 0,
+        totalRevenue: refreshed.totalRevenue || 0,
+        totalExpenses: refreshed.totalExpenses || 0,
+        netProfit: roundMoney((refreshed.totalRevenue || 0) - (refreshed.totalExpenses || 0)),
+        paymentsTotal: roundMoney(payments.reduce((s, t) => s + t.amount, 0)),
+        expensesTotal: roundMoney(expenses.reduce((s, t) => s + t.amount, 0)),
+        invoiceTotal,
+        invoicePaid,
+        invoicePending,
+        budgetRemaining,
+        paymentsCount: payments.length,
+        expensesCount: expenses.length,
+      },
+    },
   });
 });
 
@@ -106,6 +142,8 @@ export const updateProject = asyncHandler(async (req, res) => {
   if (project.status === 'Completed') project.progress = 100;
 
   await project.save();
+  await refreshProjectFinance(project._id);
+  if (project.client) await refreshClientBalances(project.client);
   await logActivity({
     action: 'update',
     module: 'projects',
@@ -115,7 +153,7 @@ export const updateProject = asyncHandler(async (req, res) => {
     user: req.user._id,
   });
 
-  const populated = await Project.findById(project._id).populate('client', 'name phone');
+  const populated = await Project.findById(project._id).populate('client', 'name phone email');
   res.json({ success: true, data: populated });
 });
 

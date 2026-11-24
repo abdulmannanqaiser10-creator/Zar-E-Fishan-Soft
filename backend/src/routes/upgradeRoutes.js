@@ -8,7 +8,7 @@ import {
   listLedger,
   listSalesReturns, createSalesReturn,
   addFollowUp,
-  addProjectMedia, deleteProjectMedia, addProjectExpense,
+  addProjectMedia, deleteProjectMedia, addProjectExpense, deleteProjectExpense,
   pendingPayments, cashFlowReport, balanceSheet,
   listBlogs, saveBlog, deleteBlog,
   listWebsiteBudgets, saveWebsiteBudget, deleteWebsiteBudget,
@@ -42,6 +42,7 @@ router.post('/clients/:id/follow-ups', addFollowUp);
 router.post('/projects/:id/media', uploadMemory.single('file'), addProjectMedia);
 router.delete('/projects/:id/media/:mediaId', deleteProjectMedia);
 router.post('/projects/:id/expenses', addProjectExpense);
+router.delete('/projects/:id/expenses/:expenseId', deleteProjectExpense);
 
 router.get('/pending-payments', pendingPayments);
 router.get('/reports/cash-flow', cashFlowReport);

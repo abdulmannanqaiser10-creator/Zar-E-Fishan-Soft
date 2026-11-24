@@ -55,13 +55,18 @@ export const refreshVendorBalances = async (vendorId, session = null) => {
 export const refreshProjectFinance = async (projectId, session = null) => {
   if (!projectId) return null;
   const opts = session ? { session } : {};
+  const mongoose = (await import('mongoose')).default;
+  const pid =
+    projectId instanceof mongoose.Types.ObjectId
+      ? projectId
+      : new mongoose.Types.ObjectId(String(projectId));
   const [income, expense] = await Promise.all([
     Transaction.aggregate([
-      { $match: { project: projectId, type: 'income' } },
+      { $match: { project: pid, type: 'income' } },
       { $group: { _id: null, total: { $sum: '$amount' } } },
     ]).session(session || null),
     Transaction.aggregate([
-      { $match: { project: projectId, type: 'expense' } },
+      { $match: { project: pid, type: 'expense' } },
       { $group: { _id: null, total: { $sum: '$amount' } } },
     ]).session(session || null),
   ]);

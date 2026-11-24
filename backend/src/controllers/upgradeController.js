@@ -349,6 +349,23 @@ export const addProjectExpense = asyncHandler(async (req, res) => {
   res.status(201).json({ success: true, data: refreshed });
 });
 
+export const deleteProjectExpense = asyncHandler(async (req, res) => {
+  const project = await Project.findById(req.params.id);
+  if (!project) throw new AppError('Project not found', 404);
+  const expense = project.projectExpenses.id(req.params.expenseId);
+  if (!expense) throw new AppError('Project expense not found', 404);
+
+  if (expense.transaction) {
+    await Transaction.findByIdAndDelete(expense.transaction);
+    await LedgerEntry.deleteMany({ transaction: expense.transaction });
+  }
+  expense.deleteOne();
+  await project.save();
+  await refreshProjectFinance(project._id);
+  const refreshed = await Project.findById(project._id).populate('client');
+  res.json({ success: true, data: refreshed });
+});
+
 /* ---------- Pending payments / notifications ---------- */
 export const pendingPayments = asyncHandler(async (req, res) => {
   const settings = (await Settings.findOne()) || { pendingPaymentAlertDays: 7 };
