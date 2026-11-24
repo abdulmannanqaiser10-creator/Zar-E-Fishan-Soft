@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
@@ -51,18 +52,29 @@ function cashFlowTableRows(raw) {
 }
 
 export default function Reports() {
-  const [type, setType] = useState('finance');
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const typeFromUrl = searchParams.get('type');
+  const initialType = TYPES.some((t) => t.value === typeFromUrl) ? typeFromUrl : 'finance';
+  const [type, setType] = useState(initialType);
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
 
-  const run = async () => {
+  useEffect(() => {
+    if (TYPES.some((t) => t.value === typeFromUrl)) {
+      setType(typeFromUrl);
+    }
+  }, [typeFromUrl]);
+
+  const run = useCallback(async (overrideType) => {
+    const activeType = overrideType || type;
     setLoading(true);
     try {
       const params = { startDate: startDate || undefined, endDate: endDate || undefined };
       let res;
-      switch (type) {
+      switch (activeType) {
         case 'projects':
           res = await reportsAPI.projects(params);
           break;
@@ -93,14 +105,21 @@ export default function Reports() {
         default:
           res = await reportsAPI.finance(params);
       }
-      setResult({ type, ...res.data });
+      setResult({ type: activeType, ...res.data });
       toast.success('Report generated');
     } catch (err) {
       toast.error(err.response?.data?.message || 'Report failed');
     } finally {
       setLoading(false);
     }
-  };
+  }, [type, startDate, endDate]);
+
+  useEffect(() => {
+    if (['cashFlow', 'profitLoss', 'balanceSheet', 'finance'].includes(type)) {
+      run(type);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [type]);
 
   const exportExcel = () => {
     if (!result) return toast.error('Generate a report first');
@@ -486,7 +505,14 @@ export default function Reports() {
         <div className="form-grid">
           <div className="form-group">
             <label>Report Type</label>
-            <select value={type} onChange={(e) => setType(e.target.value)}>
+            <select
+              value={type}
+              onChange={(e) => {
+                const next = e.target.value;
+                setType(next);
+                navigate(next === 'finance' ? '/reports' : `/reports?type=${next}`, { replace: true });
+              }}
+            >
               {TYPES.map((t) => (
                 <option key={t.value} value={t.value}>
                   {t.label}

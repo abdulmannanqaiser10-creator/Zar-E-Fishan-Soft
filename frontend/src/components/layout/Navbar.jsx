@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom'
-import { Menu, LogOut, User } from 'lucide-react'
+import { Menu, LogOut, User, Bell } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 
 export default function Navbar({ title, onMenu }) {
@@ -13,33 +13,32 @@ export default function Navbar({ title, onMenu }) {
 
   return (
     <header className="topbar">
-      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-        <button type="button" className="menu-toggle" onClick={onMenu} aria-label="Menu">
+      <div className="topbar-left">
+        <button type="button" className="menu-toggle" onClick={onMenu} aria-label="Open menu">
           <Menu size={22} />
         </button>
-        <h2>{title}</h2>
-      </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
-        <div style={{ textAlign: 'right' }}>
-          <div style={{ fontWeight: 600, color: 'var(--olive)', fontSize: '0.9rem' }}>
-            {user?.name}
-          </div>
-          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'capitalize' }}>
-            {user?.role}
-          </div>
+        <div>
+          <p className="topbar-kicker">Zar-E-Fishan</p>
+          <h2>{title}</h2>
         </div>
-        <div
-          style={{
-            width: 38,
-            height: 38,
-            borderRadius: 10,
-            background: 'rgba(197,166,117,0.25)',
-            display: 'grid',
-            placeItems: 'center',
-            color: 'var(--olive)',
-          }}
+      </div>
+      <div className="topbar-right">
+        <button
+          type="button"
+          className="icon-btn"
+          title="Pending payments"
+          onClick={() => navigate('/finance/pending')}
         >
-          <User size={18} />
+          <Bell size={18} />
+        </button>
+        <div className="user-chip">
+          <div className="user-avatar">
+            <User size={16} />
+          </div>
+          <div className="user-meta">
+            <strong>{user?.name}</strong>
+            <span>{user?.role}</span>
+          </div>
         </div>
         <button type="button" className="btn btn-outline btn-sm" onClick={handleLogout}>
           <LogOut size={14} /> Logout
