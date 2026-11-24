@@ -20,6 +20,13 @@ const settingsSchema = new mongoose.Schema(
     dateFormat: { type: String, default: 'DD/MM/YYYY' },
     lowStockAlert: { type: Boolean, default: true },
     backupEnabled: { type: Boolean, default: false },
+    pendingPaymentAlertDays: { type: Number, default: 7 },
+    fonts: {
+      heading: { type: String, default: 'Playfair Display' },
+      body: { type: String, default: 'Inter' },
+      websiteHeading: { type: String, default: 'Playfair Display' },
+      websiteBody: { type: String, default: 'Inter' },
+    },
     theme: {
       primary: { type: String, default: '#3F4932' },
       accent: { type: String, default: '#C5A675' },

@@ -2,6 +2,8 @@ import api from './axios';
 
 export const authAPI = {
   login: (data) => api.post('/auth/login', data),
+  pinLogin: (data) => api.post('/auth/pin-login', data),
+  changePin: (data) => api.put('/auth/change-pin', data),
   me: () => api.get('/auth/me'),
   updateProfile: (data) => api.put('/auth/profile', data),
   changePassword: (data) => api.put('/auth/password', data),
@@ -96,4 +98,42 @@ export const reportsAPI = {
 export const settingsAPI = {
   get: () => api.get('/settings'),
   update: (data) => api.put('/settings', data),
+};
+
+export const erpAPI = {
+  accounts: () => api.get('/erp/accounts'),
+  createAccount: (d) => api.post('/erp/accounts', d),
+  updateAccount: (id, d) => api.put(`/erp/accounts/${id}`, d),
+  quotations: (p) => api.get('/erp/quotations', { params: p }),
+  createQuotation: (d) => api.post('/erp/quotations', d),
+  updateQuotation: (id, d) => api.put(`/erp/quotations/${id}`, d),
+  convertQuotation: (id) => api.post(`/erp/quotations/${id}/convert`),
+  expenses: (p) => api.get('/erp/expenses', { params: p }),
+  createExpense: (d) => api.post('/erp/expenses', d),
+  deleteExpense: (id) => api.delete(`/erp/expenses/${id}`),
+  ledger: (p) => api.get('/erp/ledger', { params: p }),
+  salesReturns: () => api.get('/erp/sales-returns'),
+  createSalesReturn: (d) => api.post('/erp/sales-returns', d),
+  addFollowUp: (id, d) => api.post(`/erp/clients/${id}/follow-ups`, d),
+  addProjectMedia: (id, formData) =>
+    api.post(`/erp/projects/${id}/media`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
+  deleteProjectMedia: (id, mediaId) => api.delete(`/erp/projects/${id}/media/${mediaId}`),
+  addProjectExpense: (id, d) => api.post(`/erp/projects/${id}/expenses`, d),
+  pendingPayments: () => api.get('/erp/pending-payments'),
+  cashFlow: (p) => api.get('/erp/reports/cash-flow', { params: p }),
+  balanceSheet: () => api.get('/erp/reports/balance-sheet'),
+  blogs: () => api.get('/erp/website/blogs'),
+  saveBlog: (d, id) => (id ? api.put(`/erp/website/blogs/${id}`, d) : api.post('/erp/website/blogs', d)),
+  deleteBlog: (id) => api.delete(`/erp/website/blogs/${id}`),
+  websiteBudgets: () => api.get('/erp/website/budgets'),
+  saveWebsiteBudget: (d, id) =>
+    id ? api.put(`/erp/website/budgets/${id}`, d) : api.post('/erp/website/budgets', d),
+  deleteWebsiteBudget: (id) => api.delete(`/erp/website/budgets/${id}`),
+  websiteProjects: () => api.get('/erp/website/projects'),
+  saveWebsiteProject: (d, id) =>
+    id ? api.put(`/erp/website/projects/${id}`, d) : api.post('/erp/website/projects', d),
+  deleteWebsiteProject: (id) => api.delete(`/erp/website/projects/${id}`),
+  updateFonts: (d) => api.put('/erp/website/fonts', d),
 };

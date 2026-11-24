@@ -30,8 +30,15 @@ const paymentSchema = new mongoose.Schema(
 const invoiceSchema = new mongoose.Schema(
   {
     invoiceNumber: { type: String, unique: true, required: true },
-    client: { type: mongoose.Schema.Types.ObjectId, ref: 'Client', required: true },
+    invoiceType: {
+      type: String,
+      enum: ['client', 'supplier', 'purchase'],
+      default: 'client',
+    },
+    client: { type: mongoose.Schema.Types.ObjectId, ref: 'Client' },
+    vendor: { type: mongoose.Schema.Types.ObjectId, ref: 'Vendor' },
     project: { type: mongoose.Schema.Types.ObjectId, ref: 'Project' },
+    account: { type: mongoose.Schema.Types.ObjectId, ref: 'Account' },
     items: { type: [invoiceItemSchema], required: true },
     subtotal: { type: Number, required: true, min: 0 },
     taxRate: { type: Number, default: 0, min: 0 },

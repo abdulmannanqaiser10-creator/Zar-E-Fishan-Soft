@@ -17,6 +17,7 @@ import {
   projectsAPI,
   vendorsAPI,
   procurementAPI,
+  erpAPI,
 } from '../api';
 import PageHeader from '../components/common/PageHeader';
 import DataTable from '../components/common/DataTable';
@@ -38,6 +39,7 @@ const EMPTY_TXN = {
   project: '',
   client: '',
   vendor: '',
+  account: '',
 };
 
 const TABS = [
@@ -68,6 +70,7 @@ export default function Finance() {
   const [clients, setClients] = useState([]);
   const [projects, setProjects] = useState([]);
   const [vendors, setVendors] = useState([]);
+  const [accounts, setAccounts] = useState([]);
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
@@ -86,11 +89,13 @@ export default function Finance() {
       clientsAPI.list({ limit: 500 }),
       projectsAPI.list({ limit: 500 }),
       vendorsAPI.list({ limit: 500 }),
+      erpAPI.accounts(),
     ])
-      .then(([c, p, v]) => {
+      .then(([c, p, v, a]) => {
         setClients(c.data.data || []);
         setProjects(p.data.data || []);
         setVendors(v.data.data || []);
+        setAccounts(a.data.data || []);
       })
       .catch(() => {});
   }, []);
@@ -188,6 +193,7 @@ export default function Finance() {
       project: row.project?._id || row.project || '',
       client: row.client?._id || row.client || '',
       vendor: row.vendor?._id || row.vendor || '',
+      account: row.account?._id || row.account || '',
     });
     setModalOpen(true);
   };
@@ -210,6 +216,7 @@ export default function Finance() {
       project: form.project || undefined,
       client: form.client || undefined,
       vendor: form.vendor || undefined,
+      account: form.account || undefined,
     };
     try {
       if (editing) {
@@ -522,6 +529,17 @@ export default function Finance() {
                 {paymentMethods.map((m) => (
                   <option key={m.value} value={m.value}>
                     {m.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="form-group">
+              <label>Account (Cash / Bank)</label>
+              <select value={form.account || ''} onChange={(e) => setField('account', e.target.value)}>
+                <option value="">— None —</option>
+                {accounts.map((a) => (
+                  <option key={a._id} value={a._id}>
+                    {a.name} ({a.type})
                   </option>
                 ))}
               </select>

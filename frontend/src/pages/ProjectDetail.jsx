@@ -11,9 +11,11 @@ import {
   Briefcase,
   MapPin,
   Calendar,
+  Upload,
+  Image,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { projectsAPI, clientsAPI } from '../api';
+import { projectsAPI, clientsAPI, erpAPI } from '../api';
 import PageHeader from '../components/common/PageHeader';
 import DataTable from '../components/common/DataTable';
 import Modal from '../components/common/Modal';
@@ -21,7 +23,7 @@ import ConfirmDialog from '../components/common/ConfirmDialog';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import StatusBadge from '../components/common/StatusBadge';
 import StatCard from '../components/common/StatCard';
-import { formatCurrency, formatDate, formatDateTime, projectStatuses } from '../utils/format';
+import { formatCurrency, formatDate, formatDateTime, projectStatuses, paymentMethods } from '../utils/format';
 
 const STATUS_OPTIONS =
   projectStatuses ?? ['Planning', 'In Progress', 'On Hold', 'Completed'];
@@ -70,6 +72,17 @@ export default function ProjectDetail() {
   const [taskDelete, setTaskDelete] = useState(null);
   const [deletingTask, setDeletingTask] = useState(false);
   const [updatingTaskId, setUpdatingTaskId] = useState(null);
+  const [uploading, setUploading] = useState(false);
+  const [deletingMediaId, setDeletingMediaId] = useState(null);
+  const [expenseForm, setExpenseForm] = useState({
+    title: '',
+    category: 'General',
+    amount: '',
+    date: new Date().toISOString().slice(0, 10),
+    paymentMethod: 'cash',
+    notes: '',
+  });
+  const [expenseSaving, setExpenseSaving] = useState(false);
 
   const loadProject = useCallback(() => {
     setLoading(true);
@@ -93,6 +106,71 @@ export default function ProjectDetail() {
       .then((res) => setClients(res.data.data || []))
       .catch(() => {});
   }, []);
+
+  const handleMediaUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    const fd = new FormData();
+    fd.append('file', file);
+    try {
+      const res = await erpAPI.addProjectMedia(id, fd);
+      setProject(res.data.data);
+      toast.success('Media uploaded');
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Upload failed');
+    } finally {
+      setUploading(false);
+      e.target.value = '';
+    }
+  };
+
+  const removeMedia = async (mediaId) => {
+    setDeletingMediaId(mediaId);
+    try {
+      const res = await erpAPI.deleteProjectMedia(id, mediaId);
+      setProject(res.data.data);
+      toast.success('Media removed');
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Delete failed');
+    } finally {
+      setDeletingMediaId(null);
+    }
+  };
+
+  const submitProjectExpense = async (e) => {
+    e.preventDefault();
+    if (!expenseForm.title.trim() || !expenseForm.amount) {
+      toast.error('Title and amount required');
+      return;
+    }
+    setExpenseSaving(true);
+    try {
+      const res = await erpAPI.addProjectExpense(id, {
+        title: expenseForm.title.trim(),
+        category: expenseForm.category,
+        amount: Number(expenseForm.amount),
+        date: expenseForm.date,
+        paymentMethod: expenseForm.paymentMethod,
+        notes: expenseForm.notes,
+      });
+      setProject(res.data.data);
+      toast.success('Project expense recorded');
+      setExpenseForm({
+        title: '',
+        category: 'General',
+        amount: '',
+        date: new Date().toISOString().slice(0, 10),
+        paymentMethod: 'cash',
+        notes: '',
+      });
+      loadProject();
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to save expense');
+    } finally {
+      setExpenseSaving(false);
+    }
+  };
 
   const openEdit = () => {
     if (!project) return;
@@ -240,6 +318,8 @@ export default function ProjectDetail() {
   const tasks = project.tasks || [];
   const transactions = project.transactions || [];
   const activities = project.activities || [];
+  const media = project.media || [];
+  const projectExpenses = project.projectExpenses || [];
 
   const transactionColumns = [
     { key: 'transactionId', label: 'ID' },
@@ -410,6 +490,103 @@ export default function ProjectDetail() {
               </div>
             ))}
           </div>
+        </div>
+      </div>
+
+      <div className="card" style={{ marginBottom: '1.25rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+          <h3 className="section-title" style={{ margin: 0 }}>Media gallery</h3>
+          <label className="btn btn-gold btn-sm" style={{ cursor: uploading ? 'wait' : 'pointer' }}>
+            <Upload size={14} style={{ marginRight: 4 }} />
+            {uploading ? 'Uploading...' : 'Upload'}
+            <input type="file" accept="image/*,video/*" style={{ display: 'none' }} disabled={uploading} onChange={handleMediaUpload} />
+          </label>
+        </div>
+        {media.length === 0 ? (
+          <p style={{ color: 'var(--text-muted)' }}>No media yet. Upload images or videos for this project.</p>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: '0.75rem' }}>
+            {media.map((m) => (
+              <div key={m._id} style={{ position: 'relative', borderRadius: 8, overflow: 'hidden', border: '1px solid var(--border)' }}>
+                {m.type === 'video' ? (
+                  <video src={m.url} style={{ width: '100%', height: 120, objectFit: 'cover' }} controls />
+                ) : (
+                  <img src={m.url} alt={m.name} style={{ width: '100%', height: 120, objectFit: 'cover' }} />
+                )}
+                <button
+                  type="button"
+                  className="btn btn-danger btn-sm"
+                  style={{ position: 'absolute', top: 6, right: 6 }}
+                  disabled={deletingMediaId === m._id}
+                  onClick={() => removeMedia(m._id)}
+                >
+                  <Trash2 size={12} />
+                </button>
+                <div style={{ padding: '0.35rem 0.5rem', fontSize: '0.7rem', background: 'var(--cream-dark)', display: 'flex', gap: 4, alignItems: 'center' }}>
+                  <Image size={12} /> {m.name?.slice(0, 20)}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="grid-2" style={{ marginBottom: '1.25rem' }}>
+        <div className="card">
+          <h3 className="section-title">Add project expense</h3>
+          <form onSubmit={submitProjectExpense}>
+            <div className="form-grid">
+              <div className="form-group full">
+                <label>Title *</label>
+                <input value={expenseForm.title} onChange={(e) => setExpenseForm((f) => ({ ...f, title: e.target.value }))} />
+              </div>
+              <div className="form-group">
+                <label>Amount *</label>
+                <input type="number" min="1" value={expenseForm.amount} onChange={(e) => setExpenseForm((f) => ({ ...f, amount: e.target.value }))} />
+              </div>
+              <div className="form-group">
+                <label>Category</label>
+                <input value={expenseForm.category} onChange={(e) => setExpenseForm((f) => ({ ...f, category: e.target.value }))} />
+              </div>
+              <div className="form-group">
+                <label>Date</label>
+                <input type="date" value={expenseForm.date} onChange={(e) => setExpenseForm((f) => ({ ...f, date: e.target.value }))} />
+              </div>
+              <div className="form-group">
+                <label>Method</label>
+                <select value={expenseForm.paymentMethod} onChange={(e) => setExpenseForm((f) => ({ ...f, paymentMethod: e.target.value }))}>
+                  {paymentMethods.map((pm) => (
+                    <option key={pm.value} value={pm.value}>{pm.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="form-group full">
+                <label>Notes</label>
+                <textarea rows={2} value={expenseForm.notes} onChange={(e) => setExpenseForm((f) => ({ ...f, notes: e.target.value }))} />
+              </div>
+            </div>
+            <button type="submit" className="btn btn-primary btn-sm" disabled={expenseSaving} style={{ marginTop: '0.5rem' }}>
+              {expenseSaving ? 'Saving...' : 'Record expense'}
+            </button>
+          </form>
+        </div>
+        <div className="card">
+          <h3 className="section-title">Project expenses</h3>
+          {projectExpenses.length === 0 ? (
+            <p style={{ color: 'var(--text-muted)' }}>No dedicated project expenses yet.</p>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              {projectExpenses.map((pe) => (
+                <div key={pe._id} style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--border)', paddingBottom: '0.5rem' }}>
+                  <div>
+                    <strong>{pe.title}</strong>
+                    <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{pe.category} · {formatDate(pe.date)}</div>
+                  </div>
+                  <span style={{ color: 'var(--danger)', fontWeight: 600 }}>{formatCurrency(pe.amount)}</span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 

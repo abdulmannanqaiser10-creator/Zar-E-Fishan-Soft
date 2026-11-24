@@ -35,8 +35,18 @@ export function AuthProvider({ children }) {
   }, [])
 
   const login = useCallback(
-    async (email, password) => {
-      const res = await authAPI.login({ email, password })
+    async (pin) => {
+      const payload = { pin: String(pin).trim() }
+      let res
+      try {
+        res = await authAPI.pinLogin(payload)
+      } catch (err) {
+        if (err.response?.status === 404 || err.response?.status === 405) {
+          res = await authAPI.login(payload)
+        } else {
+          throw err
+        }
+      }
       const body = res.data
       if (!body?.token || !body?.user) {
         throw new Error('Invalid login response')

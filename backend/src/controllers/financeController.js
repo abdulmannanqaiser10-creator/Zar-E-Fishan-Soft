@@ -40,6 +40,7 @@ export const getTransactions = asyncHandler(async (req, res) => {
       .populate('project', 'name projectId')
       .populate('client', 'name')
       .populate('vendor', 'name')
+      .populate('account', 'name type')
       .sort({ date: -1 })
       .skip(skip)
       .limit(Number(limit)),
@@ -56,7 +57,7 @@ export const getTransactions = asyncHandler(async (req, res) => {
 export const createTransaction = asyncHandler(async (req, res) => {
   const {
     type, category, amount, paymentMethod, date, description,
-    reference, project, client, vendor, uniqueKey,
+    reference, project, client, vendor, account, uniqueKey,
   } = req.body;
 
   if (!type || !category || amount == null) {
@@ -85,8 +86,25 @@ export const createTransaction = asyncHandler(async (req, res) => {
     project,
     client,
     vendor,
+    account,
     uniqueKey,
     createdBy: req.user._id,
+  });
+
+  const { postLedger } = await import('../services/ledgerService.js');
+  await postLedger({
+    type: type === 'income' ? 'credit' : 'debit',
+    category,
+    amount: safeAmount,
+    description: description || category,
+    account,
+    client,
+    vendor,
+    project,
+    transaction: txn._id,
+    uniqueKey: uniqueKey ? `ldg-${uniqueKey}` : `ldg-txn-${txn._id}`,
+    userId: req.user._id,
+    date: date || new Date(),
   });
 
   if (project) await refreshProjectFinance(project);

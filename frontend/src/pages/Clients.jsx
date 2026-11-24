@@ -8,7 +8,10 @@ import DataTable from '../components/common/DataTable';
 import Modal from '../components/common/Modal';
 import ConfirmDialog from '../components/common/ConfirmDialog';
 import LoadingSpinner from '../components/common/LoadingSpinner';
+import StatusBadge from '../components/common/StatusBadge';
 import { formatCurrency } from '../utils/format';
+
+const CRM_STATUSES = ['Lead', 'Follow-up', 'Closed', 'Client'];
 
 const emptyForm = () => ({
   name: '',
@@ -17,6 +20,8 @@ const emptyForm = () => ({
   address: '',
   city: '',
   notes: '',
+  crmStatus: 'Client',
+  source: '',
 });
 
 export default function Clients() {
@@ -25,6 +30,7 @@ export default function Clients() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [searchInput, setSearchInput] = useState('');
+  const [crmFilter, setCrmFilter] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -37,6 +43,7 @@ export default function Clients() {
     setLoading(true);
     const params = { page, limit: 20 };
     if (search.trim()) params.search = search.trim();
+    if (crmFilter) params.crmStatus = crmFilter;
     clientsAPI
       .list(params)
       .then((res) => {
@@ -47,7 +54,7 @@ export default function Clients() {
         toast.error(err.response?.data?.message || 'Failed to load clients'),
       )
       .finally(() => setLoading(false));
-  }, [page, search]);
+  }, [page, search, crmFilter]);
 
   useEffect(() => {
     loadClients();
@@ -76,6 +83,8 @@ export default function Clients() {
       address: client.address || '',
       city: client.city || '',
       notes: client.notes || '',
+      crmStatus: client.crmStatus || 'Client',
+      source: client.source || '',
     });
     setModalOpen(true);
   };
@@ -110,6 +119,8 @@ export default function Clients() {
       address: form.address.trim(),
       city: form.city.trim(),
       notes: form.notes.trim(),
+      crmStatus: form.crmStatus,
+      source: form.source.trim(),
     };
     try {
       if (editing) {
@@ -155,6 +166,11 @@ export default function Clients() {
           )}
         </div>
       ),
+    },
+    {
+      key: 'crmStatus',
+      label: 'CRM',
+      render: (row) => <StatusBadge status={row.crmStatus || 'Client'} />,
     },
     { key: 'phone', label: 'Phone' },
     {
@@ -212,7 +228,7 @@ export default function Clients() {
     <div>
       <PageHeader
         title="Clients"
-        subtitle="Customer directory and account balances"
+        subtitle="Customer directory, CRM pipeline and balances"
         actions={
           <button type="button" className="btn btn-primary" onClick={openCreate}>
             <Plus size={16} style={{ marginRight: 6 }} />
@@ -223,7 +239,7 @@ export default function Clients() {
 
       <div className="card">
         <div className="toolbar" style={{ marginBottom: '1rem' }}>
-          <div className="toolbar-left">
+          <div className="toolbar-left" style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', flex: 1 }}>
             <div style={{ position: 'relative', flex: 1, maxWidth: 320 }}>
               <Search size={16} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', opacity: 0.5 }} />
               <input
@@ -235,6 +251,21 @@ export default function Clients() {
                 style={{ paddingLeft: 34, width: '100%' }}
               />
             </div>
+            <select
+              className="filter-select"
+              value={crmFilter}
+              onChange={(e) => {
+                setCrmFilter(e.target.value);
+                setPage(1);
+              }}
+            >
+              <option value="">All CRM statuses</option>
+              {CRM_STATUSES.map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </select>
           </div>
           <div className="toolbar-right" style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>
             {pagination.total != null ? `${pagination.total} client(s)` : null}
@@ -288,6 +319,29 @@ export default function Clients() {
                 value={form.phone}
                 onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
                 required
+              />
+            </div>
+            <div className="form-group">
+              <label htmlFor="client-crm">CRM status</label>
+              <select
+                id="client-crm"
+                value={form.crmStatus}
+                onChange={(e) => setForm((f) => ({ ...f, crmStatus: e.target.value }))}
+              >
+                {CRM_STATUSES.map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="form-group">
+              <label htmlFor="client-source">Source</label>
+              <input
+                id="client-source"
+                value={form.source}
+                onChange={(e) => setForm((f) => ({ ...f, source: e.target.value }))}
+                placeholder="Referral, website..."
               />
             </div>
             <div className="form-group">

@@ -27,6 +27,7 @@ const transactionSchema = new mongoose.Schema(
     vendor: { type: mongoose.Schema.Types.ObjectId, ref: 'Vendor' },
     invoice: { type: mongoose.Schema.Types.ObjectId, ref: 'Invoice' },
     purchaseOrder: { type: mongoose.Schema.Types.ObjectId, ref: 'PurchaseOrder' },
+    account: { type: mongoose.Schema.Types.ObjectId, ref: 'Account' },
     // Prevent duplicate linked payments
     uniqueKey: { type: String, sparse: true, unique: true },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },

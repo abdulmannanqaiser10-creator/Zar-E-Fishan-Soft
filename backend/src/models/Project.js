@@ -15,6 +15,35 @@ const taskSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+const mediaSchema = new mongoose.Schema(
+  {
+    type: { type: String, enum: ['image', 'video'], required: true },
+    url: { type: String, required: true },
+    name: { type: String, default: '' },
+    size: { type: Number, default: 0 },
+    uploadedAt: { type: Date, default: Date.now },
+  },
+  { _id: true }
+);
+
+const projectExpenseSchema = new mongoose.Schema(
+  {
+    title: { type: String, required: true },
+    category: { type: String, default: 'General' },
+    amount: { type: Number, required: true, min: 0 },
+    date: { type: Date, default: Date.now },
+    paymentMethod: {
+      type: String,
+      enum: ['cash', 'card', 'bank_transfer', 'cheque', 'online', 'other'],
+      default: 'cash',
+    },
+    account: { type: mongoose.Schema.Types.ObjectId, ref: 'Account' },
+    notes: { type: String, default: '' },
+    transaction: { type: mongoose.Schema.Types.ObjectId, ref: 'Transaction' },
+  },
+  { timestamps: true }
+);
+
 const projectSchema = new mongoose.Schema(
   {
     projectId: { type: String, unique: true, required: true },
@@ -31,6 +60,8 @@ const projectSchema = new mongoose.Schema(
     },
     progress: { type: Number, default: 0, min: 0, max: 100 },
     tasks: [taskSchema],
+    media: [mediaSchema],
+    projectExpenses: [projectExpenseSchema],
     totalRevenue: { type: Number, default: 0 },
     totalExpenses: { type: Number, default: 0 },
     location: { type: String, default: '' },

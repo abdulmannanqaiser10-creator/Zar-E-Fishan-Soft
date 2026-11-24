@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, Trash2, ArrowLeft, Wallet } from 'lucide-react';
+import { Plus, Trash2, ArrowLeft, Wallet, Eye } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { financeAPI, clientsAPI, projectsAPI } from '../api';
+import { financeAPI, clientsAPI, projectsAPI, vendorsAPI, settingsAPI } from '../api';
 import PageHeader from '../components/common/PageHeader';
 import DataTable from '../components/common/DataTable';
 import Modal from '../components/common/Modal';
@@ -40,14 +40,20 @@ export default function Invoices() {
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [typeFilter, setTypeFilter] = useState('');
 
   const [clients, setClients] = useState([]);
+  const [vendors, setVendors] = useState([]);
   const [projects, setProjects] = useState([]);
+  const [companyLogo, setCompanyLogo] = useState('');
+  const [viewInvoice, setViewInvoice] = useState(null);
 
   const [createOpen, setCreateOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [invoiceForm, setInvoiceForm] = useState({
+    invoiceType: 'client',
     client: '',
+    vendor: '',
     project: '',
     taxRate: 0,
     discountAmount: 0,
@@ -90,6 +96,7 @@ export default function Invoices() {
           limit: 20,
           search: search || undefined,
           status: statusFilter || undefined,
+          invoiceType: typeFilter || undefined,
         })
         .then((res) => {
           setInvoices(res.data.data || []);
@@ -98,7 +105,7 @@ export default function Invoices() {
         .catch((err) => toast.error(err.response?.data?.message || 'Failed to load invoices'))
         .finally(() => setLoading(false));
     },
-    [search, statusFilter],
+    [search, statusFilter, typeFilter],
   );
 
   useEffect(() => {
@@ -108,20 +115,29 @@ export default function Invoices() {
 
   useEffect(() => {
     loadInvoices(1);
-  }, [search, statusFilter, loadInvoices]);
+  }, [search, statusFilter, typeFilter, loadInvoices]);
 
   useEffect(() => {
-    Promise.all([clientsAPI.list({ limit: 500 }), projectsAPI.list({ limit: 500 })])
-      .then(([c, p]) => {
+    Promise.all([
+      clientsAPI.list({ limit: 500 }),
+      projectsAPI.list({ limit: 500 }),
+      vendorsAPI.list({ limit: 500 }),
+      settingsAPI.get(),
+    ])
+      .then(([c, p, v, s]) => {
         setClients(c.data.data || []);
         setProjects(p.data.data || []);
+        setVendors(v.data.data || []);
+        setCompanyLogo(s.data?.data?.logo || s.data?.logo || '');
       })
       .catch(() => {});
   }, []);
 
   const openCreate = () => {
     setInvoiceForm({
+      invoiceType: 'client',
       client: '',
+      vendor: '',
       project: '',
       taxRate: 0,
       discountAmount: 0,
@@ -153,7 +169,12 @@ export default function Invoices() {
 
   const handleCreate = async (e) => {
     e.preventDefault();
-    if (!invoiceForm.client) {
+    const isPayable = invoiceForm.invoiceType === 'supplier' || invoiceForm.invoiceType === 'purchase';
+    if (isPayable && !invoiceForm.vendor) {
+      toast.error('Vendor is required');
+      return;
+    }
+    if (!isPayable && !invoiceForm.client) {
       toast.error('Client is required');
       return;
     }
@@ -165,7 +186,9 @@ export default function Invoices() {
     setSaving(true);
     try {
       await financeAPI.createInvoice({
-        client: invoiceForm.client,
+        invoiceType: invoiceForm.invoiceType,
+        client: isPayable ? undefined : invoiceForm.client,
+        vendor: isPayable ? invoiceForm.vendor : undefined,
         project: invoiceForm.project || undefined,
         items: validItems.map((it) => ({
           description: it.description.trim(),
@@ -244,7 +267,8 @@ export default function Invoices() {
 
   const columns = [
     { key: 'invoiceNumber', label: 'Invoice #' },
-    { key: 'client', label: 'Client', render: (r) => r.client?.name || '—' },
+    { key: 'invoiceType', label: 'Type', render: (r) => r.invoiceType || 'client' },
+    { key: 'party', label: 'Party', render: (r) => r.client?.name || r.vendor?.name || '—' },
     { key: 'project', label: 'Project', render: (r) => r.project?.name || '—' },
     { key: 'issueDate', label: 'Issued', render: (r) => formatDate(r.issueDate) },
     { key: 'dueDate', label: 'Due', render: (r) => formatDate(r.dueDate) },
@@ -262,9 +286,12 @@ export default function Invoices() {
     {
       key: 'actions',
       label: '',
-      width: '110px',
+      width: '140px',
       render: (r) => (
         <div className="actions">
+          <button type="button" className="btn btn-outline btn-sm" onClick={() => setViewInvoice(r)} title="View">
+            <Eye size={14} />
+          </button>
           {r.status !== 'paid' && r.status !== 'cancelled' && (
             <button type="button" className="btn btn-gold btn-sm" onClick={() => openPayment(r)} title="Record payment">
               <Wallet size={14} />
@@ -307,6 +334,16 @@ export default function Invoices() {
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
           />
+          <select
+            className="filter-select"
+            value={typeFilter}
+            onChange={(e) => setTypeFilter(e.target.value)}
+          >
+            <option value="">All types</option>
+            <option value="client">Client</option>
+            <option value="supplier">Supplier</option>
+            <option value="purchase">Purchase</option>
+          </select>
           <select
             className="filter-select"
             value={statusFilter}
@@ -355,20 +392,49 @@ export default function Invoices() {
         <form id="invoice-form" onSubmit={handleCreate}>
           <div className="form-grid" style={{ marginBottom: '1rem' }}>
             <div className="form-group">
-              <label>Client *</label>
+              <label>Invoice type</label>
               <select
-                value={invoiceForm.client}
-                onChange={(e) => setInvoiceForm((f) => ({ ...f, client: e.target.value }))}
-                required
+                value={invoiceForm.invoiceType}
+                onChange={(e) => setInvoiceForm((f) => ({ ...f, invoiceType: e.target.value, client: '', vendor: '' }))}
               >
-                <option value="">Select client</option>
-                {clients.map((c) => (
-                  <option key={c._id} value={c._id}>
-                    {c.name}
-                  </option>
-                ))}
+                <option value="client">Client (receivable)</option>
+                <option value="supplier">Supplier (payable)</option>
+                <option value="purchase">Purchase (payable)</option>
               </select>
             </div>
+            {invoiceForm.invoiceType === 'client' ? (
+              <div className="form-group">
+                <label>Client *</label>
+                <select
+                  value={invoiceForm.client}
+                  onChange={(e) => setInvoiceForm((f) => ({ ...f, client: e.target.value }))}
+                  required
+                >
+                  <option value="">Select client</option>
+                  {clients.map((c) => (
+                    <option key={c._id} value={c._id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : (
+              <div className="form-group">
+                <label>Vendor *</label>
+                <select
+                  value={invoiceForm.vendor}
+                  onChange={(e) => setInvoiceForm((f) => ({ ...f, vendor: e.target.value }))}
+                  required
+                >
+                  <option value="">Select vendor</option>
+                  {vendors.map((v) => (
+                    <option key={v._id} value={v._id}>
+                      {v.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
             <div className="form-group">
               <label>Project</label>
               <select
@@ -595,6 +661,63 @@ export default function Invoices() {
             </div>
           </div>
         </form>
+      </Modal>
+
+      <Modal
+        open={!!viewInvoice}
+        title={viewInvoice ? `Invoice ${viewInvoice.invoiceNumber}` : 'Invoice'}
+        large
+        onClose={() => setViewInvoice(null)}
+        footer={
+          <button type="button" className="btn btn-outline" onClick={() => setViewInvoice(null)}>
+            Close
+          </button>
+        }
+      >
+        {viewInvoice && (
+          <div>
+            {companyLogo && (
+              <div style={{ marginBottom: '1rem' }}>
+                <img src={companyLogo} alt="Company logo" style={{ maxHeight: 64, objectFit: 'contain' }} />
+              </div>
+            )}
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1rem', fontSize: '0.9rem' }}>
+              <div>
+                <strong style={{ color: 'var(--olive)' }}>Bill to</strong>
+                <p style={{ margin: '0.25rem 0' }}>{viewInvoice.client?.name || viewInvoice.vendor?.name || '—'}</p>
+                <StatusBadge status={viewInvoice.status} />
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                <div>Issued: {formatDate(viewInvoice.issueDate)}</div>
+                <div>Due: {formatDate(viewInvoice.dueDate)}</div>
+                <div>Type: {viewInvoice.invoiceType || 'client'}</div>
+              </div>
+            </div>
+            <table className="data-table" style={{ width: '100%', fontSize: '0.9rem' }}>
+              <thead>
+                <tr>
+                  <th>Description</th>
+                  <th>Qty</th>
+                  <th>Price</th>
+                  <th>Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(viewInvoice.items || []).map((it, i) => (
+                  <tr key={i}>
+                    <td>{it.description}</td>
+                    <td>{it.quantity}</td>
+                    <td>{formatCurrency(it.unitPrice)}</td>
+                    <td>{formatCurrency(it.amount ?? (Number(it.quantity) * Number(it.unitPrice)))}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <div style={{ marginTop: '1rem', textAlign: 'right', fontWeight: 700, color: 'var(--olive)' }}>
+              Total: {formatCurrency(viewInvoice.total)} · Balance: {formatCurrency(viewInvoice.remainingBalance)}
+            </div>
+          </div>
+        )}
       </Modal>
 
       <ConfirmDialog

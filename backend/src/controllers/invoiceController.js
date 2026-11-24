@@ -24,10 +24,12 @@ const deriveStatus = (invoice) => {
 };
 
 export const getInvoices = asyncHandler(async (req, res) => {
-  const { search, status, client, page = 1, limit = 20 } = req.query;
+  const { search, status, client, vendor, invoiceType, page = 1, limit = 20 } = req.query;
   const query = {};
   if (status) query.status = status;
   if (client) query.client = client;
+  if (vendor) query.vendor = vendor;
+  if (invoiceType) query.invoiceType = invoiceType;
   if (search) {
     query.$or = [
       { invoiceNumber: new RegExp(search, 'i') },
@@ -38,7 +40,9 @@ export const getInvoices = asyncHandler(async (req, res) => {
   const [data, total] = await Promise.all([
     Invoice.find(query)
       .populate('client', 'name phone email')
+      .populate('vendor', 'name phone')
       .populate('project', 'name projectId')
+      .populate('account', 'name type')
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(Number(limit)),
@@ -54,19 +58,25 @@ export const getInvoices = asyncHandler(async (req, res) => {
 export const getInvoice = asyncHandler(async (req, res) => {
   const invoice = await Invoice.findById(req.params.id)
     .populate('client')
-    .populate('project', 'name projectId');
+    .populate('vendor')
+    .populate('project', 'name projectId')
+    .populate('account', 'name type');
   if (!invoice) throw new AppError('Invoice not found', 404);
-  res.json({ success: true, data: invoice });
+  const settings = await Settings.findOne();
+  res.json({ success: true, data: invoice, company: settings });
 });
 
 export const createInvoice = asyncHandler(async (req, res) => {
   const {
-    client, project, items, taxRate, discountAmount, discountPercent,
+    client, vendor, project, account, invoiceType, items, taxRate, discountAmount, discountPercent,
     issueDate, dueDate, notes, status,
   } = req.body;
 
-  if (!client || !items?.length) {
-    throw new AppError('Client and at least one item are required', 400);
+  const type = invoiceType || 'client';
+  if (!items?.length) throw new AppError('At least one item is required', 400);
+  if (type === 'client' && !client) throw new AppError('Client is required for client invoices', 400);
+  if ((type === 'supplier' || type === 'purchase') && !vendor) {
+    throw new AppError('Vendor is required for supplier/purchase invoices', 400);
   }
 
   const settings = (await Settings.findOne()) || { taxRate: 0, invoicePrefix: 'INV' };
@@ -79,25 +89,27 @@ export const createInvoice = asyncHandler(async (req, res) => {
     discountPercent: discountPercent || 0,
   });
 
-  const mappedItems = items.map((item, i) => ({
+  const mappedItems = items.map((item) => ({
     description: item.description,
     quantity: item.quantity,
     unitPrice: item.unitPrice,
     discount: item.discount || 0,
-    amount: totals.subtotal && items.length
-      ? roundMoney(
-          Math.max(0, (Number(item.quantity) || 0) * (Number(item.unitPrice) || 0) - (Number(item.discount) || 0))
-        )
-      : 0,
+    amount: roundMoney(
+      Math.max(0, (Number(item.quantity) || 0) * (Number(item.unitPrice) || 0) - (Number(item.discount) || 0))
+    ),
   }));
 
   const seq = await getNextSequence('invoice');
-  const invoiceNumber = formatDocNumber(settings.invoicePrefix || 'INV', seq);
+  const prefix = type === 'purchase' ? 'PINV' : type === 'supplier' ? 'SINV' : (settings.invoicePrefix || 'INV');
+  const invoiceNumber = formatDocNumber(prefix, seq);
 
   const invoice = await Invoice.create({
     invoiceNumber,
+    invoiceType: type,
     client,
+    vendor,
     project,
+    account,
     items: mappedItems,
     ...totals,
     discountPercent: discountPercent || 0,
@@ -110,7 +122,7 @@ export const createInvoice = asyncHandler(async (req, res) => {
     createdBy: req.user._id,
   });
 
-  await refreshClientBalances(client);
+  if (client) await refreshClientBalances(client);
   await logActivity({
     action: 'create',
     module: 'finance',
@@ -165,7 +177,7 @@ export const updateInvoice = asyncHandler(async (req, res) => {
 });
 
 export const recordPayment = asyncHandler(async (req, res) => {
-  const { amount, method, date, reference, notes } = req.body;
+  const { amount, method, date, reference, notes, account } = req.body;
   if (amount == null) throw new AppError('Payment amount is required', 400);
 
   const invoice = await Invoice.findById(req.params.id);
@@ -182,6 +194,7 @@ export const recordPayment = asyncHandler(async (req, res) => {
   const dup = await Transaction.findOne({ uniqueKey });
   if (dup) throw new AppError('Duplicate payment prevented', 400);
 
+  const isPayable = invoice.invoiceType === 'supplier' || invoice.invoiceType === 'purchase';
   const seq = await getNextSequence('transaction');
   const transactionId = formatDocNumber('TXN', seq);
 
@@ -189,8 +202,8 @@ export const recordPayment = asyncHandler(async (req, res) => {
   try {
     txn = await Transaction.create({
       transactionId,
-      type: 'income',
-      category: 'Invoice Payment',
+      type: isPayable ? 'expense' : 'income',
+      category: isPayable ? 'Supplier Payment' : 'Invoice Payment',
       amount: paymentResult.paymentAmount,
       paymentMethod: method || 'bank_transfer',
       date: date || new Date(),
@@ -198,6 +211,8 @@ export const recordPayment = asyncHandler(async (req, res) => {
       reference,
       project: invoice.project,
       client: invoice.client,
+      vendor: invoice.vendor,
+      account: account || invoice.account,
       invoice: invoice._id,
       uniqueKey,
       createdBy: req.user._id,
@@ -206,6 +221,23 @@ export const recordPayment = asyncHandler(async (req, res) => {
     if (err.code === 11000) throw new AppError('Duplicate payment prevented', 400);
     throw err;
   }
+
+  const { postLedger } = await import('../services/ledgerService.js');
+  await postLedger({
+    type: isPayable ? 'debit' : 'credit',
+    category: isPayable ? 'Supplier Payment' : 'Client Payment',
+    amount: paymentResult.paymentAmount,
+    description: invoice.invoiceNumber,
+    account: account || invoice.account,
+    client: invoice.client,
+    vendor: invoice.vendor,
+    project: invoice.project,
+    invoice: invoice._id,
+    transaction: txn._id,
+    uniqueKey: `ldg-${uniqueKey}`,
+    userId: req.user._id,
+    date: date || new Date(),
+  });
 
   invoice.payments.push({
     amount: paymentResult.paymentAmount,

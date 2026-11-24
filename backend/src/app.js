@@ -19,6 +19,7 @@ import procurementRoutes from './routes/procurementRoutes.js';
 import dashboardRoutes from './routes/dashboardRoutes.js';
 import reportRoutes from './routes/reportRoutes.js';
 import settingsRoutes from './routes/settingsRoutes.js';
+import upgradeRoutes from './routes/upgradeRoutes.js';
 
 dotenv.config();
 
@@ -54,7 +55,7 @@ app.use(
     credentials: true,
   })
 );
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({ limit: '20mb' }));
 app.use(express.urlencoded({ extended: true }));
 if (process.env.NODE_ENV !== 'production') {
   app.use(morgan('dev'));
@@ -119,6 +120,7 @@ app.use('/api/procurement', ensureDB, procurementRoutes);
 app.use('/api/dashboard', ensureDB, dashboardRoutes);
 app.use('/api/reports', ensureDB, reportRoutes);
 app.use('/api/settings', ensureDB, settingsRoutes);
+app.use('/api/erp', ensureDB, upgradeRoutes);
 
 app.use(errorHandler);
 

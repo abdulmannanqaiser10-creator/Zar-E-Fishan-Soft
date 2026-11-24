@@ -13,7 +13,16 @@ import StockMovement from './models/StockMovement.js';
 import Settings from './models/Settings.js';
 import Activity from './models/Activity.js';
 import Counter from './models/Counter.js';
+import SystemPin from './models/SystemPin.js';
+import Account from './models/Account.js';
+import Quotation from './models/Quotation.js';
+import GeneralExpense from './models/GeneralExpense.js';
+import LedgerEntry from './models/LedgerEntry.js';
+import SalesReturn from './models/SalesReturn.js';
+import Blog from './models/Blog.js';
+import { WebsiteBudget, WebsiteProject } from './models/WebsiteContent.js';
 import { calculateDocumentTotals, roundMoney } from './utils/calculations.js';
+import { ensureDefaultAccounts } from './services/ledgerService.js';
 
 dotenv.config();
 
@@ -32,6 +41,15 @@ const clearAll = async () => {
     Settings.deleteMany({}),
     Activity.deleteMany({}),
     Counter.deleteMany({}),
+    SystemPin.deleteMany({}),
+    Account.deleteMany({}),
+    Quotation.deleteMany({}),
+    GeneralExpense.deleteMany({}),
+    LedgerEntry.deleteMany({}),
+    SalesReturn.deleteMany({}),
+    Blog.deleteMany({}),
+    WebsiteBudget.deleteMany({}),
+    WebsiteProject.deleteMany({}),
   ]);
 };
 
@@ -55,6 +73,9 @@ const seed = async () => {
     phone: '+92 300 7654321',
     role: 'manager',
   });
+
+  await SystemPin.ensureDefault('1234');
+  await ensureDefaultAccounts();
 
   await Settings.create({
     companyName: 'Zar-E-Fishan',
@@ -446,7 +467,7 @@ const seed = async () => {
   });
 
   console.log('Seed completed successfully.');
-  console.log('Login: admin@zarefishan.com / admin123');
+  console.log('Login PIN: 1234');
   process.exit(0);
 };
 

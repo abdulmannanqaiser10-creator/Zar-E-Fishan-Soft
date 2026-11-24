@@ -8,14 +8,22 @@ import Projects from './pages/Projects';
 import ProjectDetail from './pages/ProjectDetail';
 import Clients from './pages/Clients';
 import ClientDetail from './pages/ClientDetail';
+import CRM from './pages/CRM';
 import Finance from './pages/Finance';
 import Invoices from './pages/Invoices';
+import Quotations from './pages/Quotations';
+import Accounts from './pages/Accounts';
+import Expenses from './pages/Expenses';
+import Ledger from './pages/Ledger';
+import SalesReturns from './pages/SalesReturns';
+import PendingPayments from './pages/PendingPayments';
 import Inventory from './pages/Inventory';
 import Procurement from './pages/Procurement';
 import Vendors from './pages/Vendors';
 import VendorDetail from './pages/VendorDetail';
 import Reports from './pages/Reports';
 import Settings from './pages/Settings';
+import Website from './pages/Website';
 
 function ProtectedRoute({ children }) {
   const { isAuthenticated, loading } = useAuth();
@@ -41,13 +49,21 @@ export default function App() {
         <Route path="projects/:id" element={<ProjectDetail />} />
         <Route path="clients" element={<Clients />} />
         <Route path="clients/:id" element={<ClientDetail />} />
+        <Route path="crm" element={<CRM />} />
         <Route path="finance" element={<Finance />} />
         <Route path="finance/invoices" element={<Invoices />} />
+        <Route path="finance/quotations" element={<Quotations />} />
+        <Route path="finance/accounts" element={<Accounts />} />
+        <Route path="finance/expenses" element={<Expenses />} />
+        <Route path="finance/ledger" element={<Ledger />} />
+        <Route path="finance/returns" element={<SalesReturns />} />
+        <Route path="finance/pending" element={<PendingPayments />} />
         <Route path="inventory" element={<Inventory />} />
         <Route path="procurement" element={<Procurement />} />
         <Route path="vendors" element={<Vendors />} />
         <Route path="vendors/:id" element={<VendorDetail />} />
         <Route path="reports" element={<Reports />} />
+        <Route path="website" element={<Website />} />
         <Route path="settings" element={<Settings />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

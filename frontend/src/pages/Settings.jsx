@@ -12,7 +12,7 @@ export default function Settings() {
   const [saving, setSaving] = useState(false);
   const [settings, setSettings] = useState(null);
   const [profile, setProfile] = useState({ name: '', email: '', phone: '' });
-  const [password, setPassword] = useState({ currentPassword: '', newPassword: '', confirm: '' });
+  const [pinForm, setPinForm] = useState({ currentPin: '', newPin: '', confirmPin: '' });
   const [users, setUsers] = useState([]);
 
   useEffect(() => {
@@ -60,24 +60,29 @@ export default function Settings() {
     }
   };
 
-  const changePassword = async (e) => {
+  const digitsOnly = (value, max = 8) => value.replace(/\D/g, '').slice(0, max);
+
+  const changePin = async (e) => {
     e.preventDefault();
-    if (password.newPassword !== password.confirm) {
-      return toast.error('Passwords do not match');
+    const currentPin = digitsOnly(pinForm.currentPin);
+    const newPin = digitsOnly(pinForm.newPin);
+    const confirmPin = digitsOnly(pinForm.confirmPin);
+    if (newPin !== confirmPin) {
+      return toast.error('New PIN and confirmation do not match');
     }
-    if (password.newPassword.length < 6) {
-      return toast.error('Password must be at least 6 characters');
+    if (newPin.length < 4 || newPin.length > 8) {
+      return toast.error('PIN must be 4–8 digits');
+    }
+    if (currentPin.length < 4) {
+      return toast.error('Enter your current PIN');
     }
     setSaving(true);
     try {
-      await authAPI.changePassword({
-        currentPassword: password.currentPassword,
-        newPassword: password.newPassword,
-      });
-      toast.success('Password changed');
-      setPassword({ currentPassword: '', newPassword: '', confirm: '' });
+      await authAPI.changePin({ currentPin, newPin });
+      toast.success('PIN changed');
+      setPinForm({ currentPin: '', newPin: '', confirmPin: '' });
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Password change failed');
+      toast.error(err.response?.data?.message || 'PIN change failed');
     } finally {
       setSaving(false);
     }
@@ -89,9 +94,9 @@ export default function Settings() {
     <div>
       <PageHeader title="Settings" subtitle="Company, invoice and account preferences" />
       <div className="tabs">
-        {['company', 'invoice', 'profile', 'password', ...(user?.role === 'admin' || user?.role === 'manager' ? ['users'] : [])].map((t) => (
+        {['company', 'invoice', 'profile', 'pin', ...(user?.role === 'admin' || user?.role === 'manager' ? ['users'] : [])].map((t) => (
           <button key={t} type="button" className={`tab ${tab === t ? 'active' : ''}`} onClick={() => setTab(t)}>
-            {t.charAt(0).toUpperCase() + t.slice(1)}
+            {t === 'pin' ? 'Change PIN' : t.charAt(0).toUpperCase() + t.slice(1)}
           </button>
         ))}
       </div>
@@ -111,6 +116,14 @@ export default function Settings() {
               </div>
               <div className="form-group"><label>Website</label>
                 <input value={settings.website || ''} onChange={(e) => setSettings({ ...settings, website: e.target.value })} />
+              </div>
+              <div className="form-group full"><label>Logo URL</label>
+                <input
+                  type="url"
+                  placeholder="https://…"
+                  value={settings.logo || ''}
+                  onChange={(e) => setSettings({ ...settings, logo: e.target.value })}
+                />
               </div>
               <div className="form-group full"><label>Address</label>
                 <textarea rows={2} value={settings.address || ''} onChange={(e) => setSettings({ ...settings, address: e.target.value })} />
@@ -173,19 +186,43 @@ export default function Settings() {
         </form>
       )}
 
-      {tab === 'password' && (
-        <form className="card form-grid" onSubmit={changePassword}>
-          <div className="form-group"><label>Current Password</label>
-            <input type="password" value={password.currentPassword} onChange={(e) => setPassword({ ...password, currentPassword: e.target.value })} />
+      {tab === 'pin' && (
+        <form className="card form-grid" onSubmit={changePin}>
+          <div className="form-group"><label>Current PIN</label>
+            <input
+              type="password"
+              inputMode="numeric"
+              autoComplete="off"
+              maxLength={8}
+              value={pinForm.currentPin}
+              onChange={(e) => setPinForm({ ...pinForm, currentPin: digitsOnly(e.target.value) })}
+            />
           </div>
-          <div className="form-group"><label>New Password</label>
-            <input type="password" value={password.newPassword} onChange={(e) => setPassword({ ...password, newPassword: e.target.value })} />
+          <div className="form-group"><label>New PIN</label>
+            <input
+              type="password"
+              inputMode="numeric"
+              autoComplete="off"
+              maxLength={8}
+              value={pinForm.newPin}
+              onChange={(e) => setPinForm({ ...pinForm, newPin: digitsOnly(e.target.value) })}
+            />
           </div>
-          <div className="form-group"><label>Confirm Password</label>
-            <input type="password" value={password.confirm} onChange={(e) => setPassword({ ...password, confirm: e.target.value })} />
+          <div className="form-group"><label>Confirm New PIN</label>
+            <input
+              type="password"
+              inputMode="numeric"
+              autoComplete="off"
+              maxLength={8}
+              value={pinForm.confirmPin}
+              onChange={(e) => setPinForm({ ...pinForm, confirmPin: digitsOnly(e.target.value) })}
+            />
           </div>
+          <p className="form-group full" style={{ fontSize: '0.85rem', color: 'var(--text-muted)', margin: 0 }}>
+            PIN must be 4–8 digits.
+          </p>
           <div className="form-group full" style={{ textAlign: 'right' }}>
-            <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? 'Saving...' : 'Change Password'}</button>
+            <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? 'Saving...' : 'Change PIN'}</button>
           </div>
         </form>
       )}

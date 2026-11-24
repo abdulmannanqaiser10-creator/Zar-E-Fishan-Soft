@@ -1,6 +1,6 @@
 import EmptyState from './EmptyState';
 
-export default function DataTable({ columns, rows, emptyTitle, emptyDescription, pagination, onPageChange }) {
+export default function DataTable({ columns, rows, emptyTitle, emptyDescription, pagination, onPageChange, rowStyle }) {
   if (!rows?.length) {
     return <EmptyState title={emptyTitle} description={emptyDescription} />;
   }
@@ -20,7 +20,7 @@ export default function DataTable({ columns, rows, emptyTitle, emptyDescription,
           </thead>
           <tbody>
             {rows.map((row) => (
-              <tr key={row._id || row.id || JSON.stringify(row)}>
+              <tr key={row._id || row.id || JSON.stringify(row)} style={rowStyle ? rowStyle(row) : undefined}>
                 {columns.map((col) => (
                   <td key={col.key}>
                     {col.render ? col.render(row) : row[col.key]}

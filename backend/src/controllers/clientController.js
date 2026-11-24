@@ -8,10 +8,11 @@ import { logActivity } from '../services/activityService.js';
 import { refreshClientBalances } from '../services/balanceService.js';
 
 export const getClients = asyncHandler(async (req, res) => {
-  const { search, page = 1, limit = 20, active } = req.query;
+  const { search, page = 1, limit = 20, active, crmStatus } = req.query;
   const query = {};
   if (active === 'true') query.isActive = true;
   if (active === 'false') query.isActive = false;
+  if (crmStatus) query.crmStatus = crmStatus;
   if (search) {
     query.$or = [
       { name: new RegExp(search, 'i') },
@@ -51,7 +52,7 @@ export const getClient = asyncHandler(async (req, res) => {
 });
 
 export const createClient = asyncHandler(async (req, res) => {
-  const { name, phone, email, address, city, notes } = req.body;
+  const { name, phone, email, address, city, notes, crmStatus, source } = req.body;
   if (!name || !phone) throw new AppError('Name and phone are required', 400);
 
   const client = await Client.create({
@@ -61,6 +62,8 @@ export const createClient = asyncHandler(async (req, res) => {
     address,
     city,
     notes,
+    crmStatus: crmStatus || 'Client',
+    source: source || '',
     createdBy: req.user._id,
   });
 
@@ -80,7 +83,7 @@ export const updateClient = asyncHandler(async (req, res) => {
   const client = await Client.findById(req.params.id);
   if (!client) throw new AppError('Client not found', 404);
 
-  const fields = ['name', 'phone', 'email', 'address', 'city', 'notes', 'isActive'];
+  const fields = ['name', 'phone', 'email', 'address', 'city', 'notes', 'isActive', 'crmStatus', 'source'];
   fields.forEach((f) => {
     if (req.body[f] !== undefined) client[f] = req.body[f];
   });

@@ -7,7 +7,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from 'recharts';
 import { Download, FileSpreadsheet } from 'lucide-react';
-import { reportsAPI } from '../api';
+import { reportsAPI, erpAPI } from '../api';
 import PageHeader from '../components/common/PageHeader';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import DataTable from '../components/common/DataTable';
@@ -23,6 +23,8 @@ const TYPES = [
   { value: 'inventory', label: 'Inventory' },
   { value: 'procurement', label: 'Procurement' },
   { value: 'vendors', label: 'Vendors' },
+  { value: 'cashFlow', label: 'Cash flow' },
+  { value: 'balanceSheet', label: 'Balance sheet' },
 ];
 
 export default function Reports() {
@@ -45,6 +47,8 @@ export default function Reports() {
         case 'inventory': res = await reportsAPI.inventory(params); break;
         case 'procurement': res = await reportsAPI.procurement(params); break;
         case 'vendors': res = await reportsAPI.vendors(params); break;
+        case 'cashFlow': res = await erpAPI.cashFlow(params); break;
+        case 'balanceSheet': res = await erpAPI.balanceSheet(); break;
         default: res = await reportsAPI.finance(params);
       }
       setResult({ type, ...res.data });
@@ -156,6 +160,28 @@ export default function Reports() {
         </div>
       );
     }
+    if (type === 'cashFlow') {
+      return (
+        <div className="stat-grid">
+          <StatCard label="Cash on Hand" value={formatCurrency(result.cashOnHand)} />
+          <StatCard label="Bank Balance" value={formatCurrency(result.bankBalance)} />
+          <StatCard
+            label="Total Liquidity"
+            value={formatCurrency((result.cashOnHand || 0) + (result.bankBalance || 0))}
+          />
+        </div>
+      );
+    }
+    if (type === 'balanceSheet' && result.data) {
+      const d = result.data;
+      return (
+        <div className="stat-grid">
+          <StatCard label="Total Assets" value={formatCurrency(d.assets?.total)} />
+          <StatCard label="Total Liabilities" value={formatCurrency(d.liabilities?.total)} />
+          <StatCard label="Equity" value={formatCurrency(d.equity?.total)} />
+        </div>
+      );
+    }
     if (type === 'inventory' && result.summary) {
       return (
         <div className="stat-grid">
@@ -179,6 +205,56 @@ export default function Reports() {
 
   const tableForType = () => {
     if (!result) return null;
+    if (type === 'cashFlow') {
+      const rows = (result.data || []).map((r) => ({
+        label: `${r._id?.year}-${String(r._id?.month).padStart(2, '0')}`,
+        kind: r._id?.type,
+        total: r.total,
+      }));
+      return (
+        <DataTable
+          columns={[
+            { key: 'label', label: 'Period' },
+            { key: 'kind', label: 'Type', render: (r) => <StatusBadge status={r.kind} /> },
+            { key: 'total', label: 'Total', render: (r) => formatCurrency(r.total) },
+          ]}
+          rows={rows}
+          emptyTitle="No cash flow data"
+        />
+      );
+    }
+    if (type === 'balanceSheet' && result.data) {
+      const d = result.data;
+      const rows = [
+        { section: 'Assets', item: 'Cash & Bank', amount: d.assets?.cashBank },
+        { section: 'Assets', item: 'Accounts Receivable', amount: d.assets?.accountsReceivable },
+        { section: 'Assets', item: 'Inventory', amount: d.assets?.inventory },
+        { section: 'Assets', item: 'Total Assets', amount: d.assets?.total, bold: true },
+        { section: 'Liabilities', item: 'Accounts Payable', amount: d.liabilities?.accountsPayable },
+        { section: 'Liabilities', item: 'Total Liabilities', amount: d.liabilities?.total, bold: true },
+        { section: 'Equity', item: 'Owner Equity', amount: d.equity?.total, bold: true },
+      ];
+      return (
+        <DataTable
+          columns={[
+            { key: 'section', label: 'Section' },
+            {
+              key: 'item',
+              label: 'Item',
+              render: (r) => (r.bold ? <strong>{r.item}</strong> : r.item),
+            },
+            {
+              key: 'amount',
+              label: 'Amount',
+              render: (r) =>
+                r.bold ? <strong>{formatCurrency(r.amount)}</strong> : formatCurrency(r.amount),
+            },
+          ]}
+          rows={rows}
+          emptyTitle="No balance sheet data"
+        />
+      );
+    }
     if (type === 'profitLoss') {
       const rows = [
         ...(result.data.incomeItems || []).map((i) => ({ ...i, kind: 'income' })),
