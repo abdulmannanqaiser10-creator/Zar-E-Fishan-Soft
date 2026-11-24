@@ -20,12 +20,35 @@ const TYPES = [
   { value: 'clients', label: 'Clients' },
   { value: 'finance', label: 'Income & Expense' },
   { value: 'profitLoss', label: 'Profit & Loss' },
+  { value: 'cashFlow', label: 'Cash Flow' },
+  { value: 'balanceSheet', label: 'Balance Sheet' },
   { value: 'inventory', label: 'Inventory' },
   { value: 'procurement', label: 'Procurement' },
   { value: 'vendors', label: 'Vendors' },
-  { value: 'cashFlow', label: 'Cash flow' },
-  { value: 'balanceSheet', label: 'Balance sheet' },
 ];
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+function cashFlowTableRows(raw) {
+  const map = {};
+  (raw || []).forEach((r) => {
+    const key = `${r._id.year}-${r._id.month}`;
+    if (!map[key]) {
+      map[key] = {
+        key,
+        label: `${MONTHS[(r._id.month || 1) - 1]} ${r._id.year}`,
+        income: 0,
+        expense: 0,
+      };
+    }
+    if (r._id.type === 'income') map[key].income = r.total;
+    else map[key].expense = r.total;
+  });
+  return Object.values(map).map((r) => ({
+    ...r,
+    net: (r.income || 0) - (r.expense || 0),
+  }));
+}
 
 export default function Reports() {
   const [type, setType] = useState('finance');
@@ -40,16 +63,35 @@ export default function Reports() {
       const params = { startDate: startDate || undefined, endDate: endDate || undefined };
       let res;
       switch (type) {
-        case 'projects': res = await reportsAPI.projects(params); break;
-        case 'clients': res = await reportsAPI.clients(params); break;
-        case 'finance': res = await reportsAPI.finance(params); break;
-        case 'profitLoss': res = await reportsAPI.profitLoss(params); break;
-        case 'inventory': res = await reportsAPI.inventory(params); break;
-        case 'procurement': res = await reportsAPI.procurement(params); break;
-        case 'vendors': res = await reportsAPI.vendors(params); break;
-        case 'cashFlow': res = await erpAPI.cashFlow(params); break;
-        case 'balanceSheet': res = await erpAPI.balanceSheet(); break;
-        default: res = await reportsAPI.finance(params);
+        case 'projects':
+          res = await reportsAPI.projects(params);
+          break;
+        case 'clients':
+          res = await reportsAPI.clients(params);
+          break;
+        case 'finance':
+          res = await reportsAPI.finance(params);
+          break;
+        case 'profitLoss':
+          res = await reportsAPI.profitLoss(params);
+          break;
+        case 'cashFlow':
+          res = await erpAPI.cashFlow(params);
+          break;
+        case 'balanceSheet':
+          res = await erpAPI.balanceSheet();
+          break;
+        case 'inventory':
+          res = await reportsAPI.inventory(params);
+          break;
+        case 'procurement':
+          res = await reportsAPI.procurement(params);
+          break;
+        case 'vendors':
+          res = await reportsAPI.vendors(params);
+          break;
+        default:
+          res = await reportsAPI.finance(params);
       }
       setResult({ type, ...res.data });
       toast.success('Report generated');
@@ -61,46 +103,103 @@ export default function Reports() {
   };
 
   const exportExcel = () => {
-    if (!result?.data) return toast.error('Generate a report first');
-    const rows = Array.isArray(result.data) ? result.data : [];
-    const flat = rows.map((r) => {
-      if (type === 'finance') {
-        return {
-          ID: r.transactionId, Type: r.type, Category: r.category,
-          Amount: r.amount, Date: formatDate(r.date), Description: r.description,
-        };
-      }
-      if (type === 'projects') {
-        return {
-          ID: r.projectId, Name: r.name, Client: r.client?.name, Budget: r.budget,
-          Revenue: r.totalRevenue, Expenses: r.totalExpenses, Status: r.status,
-        };
-      }
-      if (type === 'clients') {
-        return {
-          Name: r.name, Phone: r.phone, Value: r.totalProjectValue,
-          Paid: r.totalPaid, Pending: r.totalPending,
-        };
-      }
-      if (type === 'inventory') {
-        return {
-          SKU: r.sku, Name: r.name, Category: r.category,
-          Qty: r.quantity, Cost: r.costPrice, Value: (r.quantity || 0) * (r.costPrice || 0),
-        };
-      }
-      if (type === 'procurement') {
-        return {
-          PO: r.poNumber, Vendor: r.vendor?.name, Total: r.total,
-          Paid: r.paidAmount, Balance: r.remainingBalance, Status: r.status,
-        };
-      }
-      if (type === 'vendors') {
-        return {
-          Name: r.name, Purchases: r.totalPurchases, Paid: r.totalPaid, Outstanding: r.totalOutstanding,
-        };
-      }
-      return r;
-    });
+    if (!result) return toast.error('Generate a report first');
+    let flat = [];
+    if (type === 'cashFlow') {
+      flat = cashFlowTableRows(result.data).map((r) => ({
+        Period: r.label,
+        Income: r.income,
+        Expense: r.expense,
+        Net: r.net,
+      }));
+    } else if (type === 'balanceSheet' && result.data) {
+      const d = result.data;
+      flat = [
+        { Section: 'Assets', Item: 'Cash & Bank', Amount: d.assets?.cashBank },
+        { Section: 'Assets', Item: 'Accounts Receivable', Amount: d.assets?.accountsReceivable },
+        { Section: 'Assets', Item: 'Inventory', Amount: d.assets?.inventory },
+        { Section: 'Assets', Item: 'Total Assets', Amount: d.assets?.total },
+        { Section: 'Liabilities', Item: 'Accounts Payable', Amount: d.liabilities?.accountsPayable },
+        { Section: 'Liabilities', Item: 'Total Liabilities', Amount: d.liabilities?.total },
+        { Section: 'Equity', Item: 'Total Equity', Amount: d.equity?.total },
+      ];
+    } else if (type === 'profitLoss' && result.data) {
+      flat = [
+        ...(result.data.incomeItems || []).map((i) => ({
+          Type: 'Income',
+          Category: i._id?.category,
+          Total: i.total,
+        })),
+        ...(result.data.expenseItems || []).map((i) => ({
+          Type: 'Expense',
+          Category: i._id?.category,
+          Total: i.total,
+        })),
+      ];
+    } else {
+      const rows = Array.isArray(result.data) ? result.data : [];
+      flat = rows.map((r) => {
+        if (type === 'finance') {
+          return {
+            ID: r.transactionId,
+            Type: r.type,
+            Category: r.category,
+            Amount: r.amount,
+            Date: formatDate(r.date),
+            Description: r.description,
+          };
+        }
+        if (type === 'projects') {
+          return {
+            ID: r.projectId,
+            Name: r.name,
+            Client: r.client?.name,
+            Budget: r.budget,
+            Revenue: r.totalRevenue,
+            Expenses: r.totalExpenses,
+            Status: r.status,
+          };
+        }
+        if (type === 'clients') {
+          return {
+            Name: r.name,
+            Phone: r.phone,
+            Value: r.totalProjectValue,
+            Paid: r.totalPaid,
+            Pending: r.totalPending,
+          };
+        }
+        if (type === 'inventory') {
+          return {
+            SKU: r.sku,
+            Name: r.name,
+            Category: r.category,
+            Qty: r.quantity,
+            Cost: r.costPrice,
+            Value: (r.quantity || 0) * (r.costPrice || 0),
+          };
+        }
+        if (type === 'procurement') {
+          return {
+            PO: r.poNumber,
+            Vendor: r.vendor?.name,
+            Total: r.total,
+            Paid: r.paidAmount,
+            Balance: r.remainingBalance,
+            Status: r.status,
+          };
+        }
+        if (type === 'vendors') {
+          return {
+            Name: r.name,
+            Purchases: r.totalPurchases,
+            Paid: r.totalPaid,
+            Outstanding: r.totalOutstanding,
+          };
+        }
+        return r;
+      });
+    }
     const sheet = XLSX.utils.json_to_sheet(flat);
     const book = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(book, sheet, 'Report');
@@ -113,15 +212,39 @@ export default function Reports() {
     doc.setFontSize(16);
     doc.text('Zar-E-Fishan Report', 14, 18);
     doc.setFontSize(10);
-    doc.text(`${TYPES.find((t) => t.value === type)?.label || type} · ${startDate || 'All'} to ${endDate || 'All'}`, 14, 26);
+    doc.text(
+      `${TYPES.find((t) => t.value === type)?.label || type} · ${startDate || 'All'} to ${endDate || 'All'}`,
+      14,
+      26,
+    );
 
-    const rows = Array.isArray(result.data) ? result.data.slice(0, 40) : [];
     let head = [];
     let body = [];
-    if (type === 'finance') {
+    if (type === 'cashFlow') {
+      head = [['Period', 'Income', 'Expense', 'Net']];
+      body = cashFlowTableRows(result.data).map((r) => [
+        r.label,
+        String(r.income),
+        String(r.expense),
+        String(r.net),
+      ]);
+    } else if (type === 'balanceSheet' && result.data) {
+      const d = result.data;
+      head = [['Section', 'Item', 'Amount']];
+      body = [
+        ['Assets', 'Cash & Bank', String(d.assets?.cashBank || 0)],
+        ['Assets', 'Receivables', String(d.assets?.accountsReceivable || 0)],
+        ['Assets', 'Inventory', String(d.assets?.inventory || 0)],
+        ['Assets', 'Total', String(d.assets?.total || 0)],
+        ['Liabilities', 'Payables', String(d.liabilities?.accountsPayable || 0)],
+        ['Equity', 'Total', String(d.equity?.total || 0)],
+      ];
+    } else if (type === 'finance') {
+      const rows = Array.isArray(result.data) ? result.data.slice(0, 40) : [];
       head = [['ID', 'Type', 'Category', 'Amount', 'Date']];
       body = rows.map((r) => [r.transactionId, r.type, r.category, String(r.amount), formatDate(r.date)]);
     } else if (type === 'projects') {
+      const rows = Array.isArray(result.data) ? result.data.slice(0, 40) : [];
       head = [['ID', 'Name', 'Budget', 'Status']];
       body = rows.map((r) => [r.projectId, r.name, String(r.budget), r.status]);
     } else if (type === 'profitLoss') {
@@ -131,8 +254,12 @@ export default function Reports() {
         ...(result.data.expenseItems || []).map((i) => ['Expense', i._id.category, String(i.total)]),
       ];
     } else {
+      const rows = Array.isArray(result.data) ? result.data.slice(0, 40) : [];
       head = [['Name', 'Value']];
-      body = rows.map((r) => [r.name || r.poNumber || r.sku || '—', String(r.total || r.totalPurchases || r.quantity || '')]);
+      body = rows.map((r) => [
+        r.name || r.poNumber || r.sku || '—',
+        String(r.total || r.totalPurchases || r.quantity || ''),
+      ]);
     }
 
     autoTable(doc, { startY: 32, head, body });
@@ -141,7 +268,6 @@ export default function Reports() {
 
   const renderSummary = () => {
     if (!result) return null;
-    const s = result.summary || result.data;
     if (type === 'finance' && result.summary) {
       return (
         <div className="stat-grid">
@@ -163,11 +289,11 @@ export default function Reports() {
     if (type === 'cashFlow') {
       return (
         <div className="stat-grid">
-          <StatCard label="Cash on Hand" value={formatCurrency(result.cashOnHand)} />
-          <StatCard label="Bank Balance" value={formatCurrency(result.bankBalance)} />
+          <StatCard label="Cash on hand" value={formatCurrency(result.cashOnHand)} />
+          <StatCard label="Bank balance" value={formatCurrency(result.bankBalance)} />
           <StatCard
-            label="Total Liquidity"
-            value={formatCurrency((result.cashOnHand || 0) + (result.bankBalance || 0))}
+            label="Accounts"
+            value={(result.accounts || []).length}
           />
         </div>
       );
@@ -176,8 +302,8 @@ export default function Reports() {
       const d = result.data;
       return (
         <div className="stat-grid">
-          <StatCard label="Total Assets" value={formatCurrency(d.assets?.total)} />
-          <StatCard label="Total Liabilities" value={formatCurrency(d.liabilities?.total)} />
+          <StatCard label="Total assets" value={formatCurrency(d.assets?.total)} />
+          <StatCard label="Total liabilities" value={formatCurrency(d.liabilities?.total)} />
           <StatCard label="Equity" value={formatCurrency(d.equity?.total)} />
         </div>
       );
@@ -191,38 +317,52 @@ export default function Reports() {
         </div>
       );
     }
-    if (s && typeof s === 'object' && !Array.isArray(s)) {
-      return (
-        <div className="stat-grid">
-          {Object.entries(s).filter(([, v]) => typeof v === 'number').slice(0, 4).map(([k, v]) => (
-            <StatCard key={k} label={k} value={k.toLowerCase().includes('count') ? v : formatCurrency(v)} />
-          ))}
-        </div>
-      );
-    }
     return null;
   };
 
   const tableForType = () => {
     if (!result) return null;
+
     if (type === 'cashFlow') {
-      const rows = (result.data || []).map((r) => ({
-        label: `${r._id?.year}-${String(r._id?.month).padStart(2, '0')}`,
-        kind: r._id?.type,
-        total: r.total,
-      }));
+      const rows = cashFlowTableRows(result.data);
       return (
-        <DataTable
-          columns={[
-            { key: 'label', label: 'Period' },
-            { key: 'kind', label: 'Type', render: (r) => <StatusBadge status={r.kind} /> },
-            { key: 'total', label: 'Total', render: (r) => formatCurrency(r.total) },
-          ]}
-          rows={rows}
-          emptyTitle="No cash flow data"
-        />
+        <>
+          <DataTable
+            columns={[
+              { key: 'label', label: 'Period' },
+              { key: 'income', label: 'Income', render: (r) => formatCurrency(r.income) },
+              { key: 'expense', label: 'Expense', render: (r) => formatCurrency(r.expense) },
+              {
+                key: 'net',
+                label: 'Net',
+                render: (r) => (
+                  <span style={{ color: r.net >= 0 ? 'var(--success)' : 'var(--danger)', fontWeight: 600 }}>
+                    {formatCurrency(r.net)}
+                  </span>
+                ),
+              },
+            ]}
+            rows={rows}
+            emptyTitle="No cash flow data"
+          />
+          {(result.accounts || []).length > 0 && (
+            <div style={{ marginTop: '1.25rem' }}>
+              <h4 className="section-title">Account balances</h4>
+              <DataTable
+                columns={[
+                  { key: 'name', label: 'Account' },
+                  { key: 'type', label: 'Type', render: (r) => <StatusBadge status={r.type} /> },
+                  { key: 'balance', label: 'Balance', render: (r) => formatCurrency(r.balance) },
+                ]}
+                rows={result.accounts}
+                emptyTitle="No accounts"
+              />
+            </div>
+          )}
+        </>
       );
     }
+
     if (type === 'balanceSheet' && result.data) {
       const d = result.data;
       const rows = [
@@ -255,6 +395,7 @@ export default function Reports() {
         />
       );
     }
+
     if (type === 'profitLoss') {
       const rows = [
         ...(result.data.incomeItems || []).map((i) => ({ ...i, kind: 'income' })),
@@ -307,7 +448,14 @@ export default function Reports() {
       <DataTable
         columns={[
           { key: 'name', label: 'Name', render: (r) => r.name || r.poNumber || r.sku },
-          { key: 'value', label: 'Value', render: (r) => formatCurrency(r.total || r.totalProjectValue || r.totalPurchases || ((r.quantity || 0) * (r.costPrice || 0))) },
+          {
+            key: 'value',
+            label: 'Value',
+            render: (r) =>
+              formatCurrency(
+                r.total || r.totalProjectValue || r.totalPurchases || (r.quantity || 0) * (r.costPrice || 0),
+              ),
+          },
         ]}
         rows={data}
         emptyTitle="No data"
@@ -317,28 +465,47 @@ export default function Reports() {
 
   return (
     <div>
-      <PageHeader title="Reports" subtitle="Business intelligence with export options"
+      <PageHeader
+        title="Reports"
+        subtitle="Business intelligence with export options"
         actions={
           <div className="toolbar-right">
-            <button type="button" className="btn btn-outline" onClick={exportExcel}><FileSpreadsheet size={16} /> Excel</button>
-            <button type="button" className="btn btn-outline" onClick={exportPDF}><Download size={16} /> PDF</button>
-            <button type="button" className="btn btn-primary" onClick={run}>Generate</button>
+            <button type="button" className="btn btn-outline" onClick={exportExcel}>
+              <FileSpreadsheet size={16} /> Excel
+            </button>
+            <button type="button" className="btn btn-outline" onClick={exportPDF}>
+              <Download size={16} /> PDF
+            </button>
+            <button type="button" className="btn btn-primary" onClick={run}>
+              Generate
+            </button>
           </div>
         }
       />
       <div className="card" style={{ marginBottom: '1.25rem' }}>
         <div className="form-grid">
-          <div className="form-group"><label>Report Type</label>
+          <div className="form-group">
+            <label>Report Type</label>
             <select value={type} onChange={(e) => setType(e.target.value)}>
-              {TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+              {TYPES.map((t) => (
+                <option key={t.value} value={t.value}>
+                  {t.label}
+                </option>
+              ))}
             </select>
           </div>
-          <div className="form-group"><label>Start Date</label>
-            <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
-          </div>
-          <div className="form-group"><label>End Date</label>
-            <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
-          </div>
+          {type !== 'balanceSheet' && (
+            <>
+              <div className="form-group">
+                <label>Start Date</label>
+                <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+              </div>
+              <div className="form-group">
+                <label>End Date</label>
+                <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+              </div>
+            </>
+          )}
         </div>
       </div>
 

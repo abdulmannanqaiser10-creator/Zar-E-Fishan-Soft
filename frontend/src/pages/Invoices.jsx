@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, Trash2, ArrowLeft, Wallet, Eye } from 'lucide-react';
+import { Plus, Trash2, ArrowLeft, Wallet, Eye, Printer } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { financeAPI, clientsAPI, projectsAPI, vendorsAPI, settingsAPI } from '../api';
+import { financeAPI, clientsAPI, projectsAPI, vendorsAPI, erpAPI, settingsAPI } from '../api';
 import PageHeader from '../components/common/PageHeader';
 import DataTable from '../components/common/DataTable';
 import Modal from '../components/common/Modal';
@@ -12,6 +12,9 @@ import StatusBadge from '../components/common/StatusBadge';
 import { formatCurrency, formatDate, paymentMethods } from '../utils/format';
 
 const EMPTY_ITEM = { description: '', quantity: 1, unitPrice: '', discount: 0 };
+const CORE_METHODS = paymentMethods.filter((m) =>
+  ['cash', 'card', 'bank_transfer'].includes(m.value),
+);
 
 function roundMoney(n) {
   return Math.round(Number(n) || 0);
@@ -43,10 +46,10 @@ export default function Invoices() {
   const [typeFilter, setTypeFilter] = useState('');
 
   const [clients, setClients] = useState([]);
-  const [vendors, setVendors] = useState([]);
   const [projects, setProjects] = useState([]);
-  const [companyLogo, setCompanyLogo] = useState('');
-  const [viewInvoice, setViewInvoice] = useState(null);
+  const [vendors, setVendors] = useState([]);
+  const [accounts, setAccounts] = useState([]);
+  const [company, setCompany] = useState(null);
 
   const [createOpen, setCreateOpen] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -55,6 +58,8 @@ export default function Invoices() {
     client: '',
     vendor: '',
     project: '',
+    account: '',
+    paymentMethod: 'bank_transfer',
     taxRate: 0,
     discountAmount: 0,
     dueDate: '',
@@ -68,11 +73,16 @@ export default function Invoices() {
   const [paymentForm, setPaymentForm] = useState({
     amount: '',
     method: 'bank_transfer',
+    account: '',
     date: new Date().toISOString().slice(0, 10),
     reference: '',
     notes: '',
   });
   const [paying, setPaying] = useState(false);
+
+  const [viewOpen, setViewOpen] = useState(false);
+  const [viewInvoice, setViewInvoice] = useState(null);
+  const [viewLoading, setViewLoading] = useState(false);
 
   const [deleteId, setDeleteId] = useState(null);
   const [deleting, setDeleting] = useState(false);
@@ -86,6 +96,9 @@ export default function Invoices() {
       ),
     [invoiceForm.items, invoiceForm.taxRate, invoiceForm.discountAmount],
   );
+
+  const isPayableType =
+    invoiceForm.invoiceType === 'supplier' || invoiceForm.invoiceType === 'purchase';
 
   const loadInvoices = useCallback(
     (page = 1) => {
@@ -122,13 +135,15 @@ export default function Invoices() {
       clientsAPI.list({ limit: 500 }),
       projectsAPI.list({ limit: 500 }),
       vendorsAPI.list({ limit: 500 }),
+      erpAPI.accounts(),
       settingsAPI.get(),
     ])
-      .then(([c, p, v, s]) => {
+      .then(([c, p, v, a, s]) => {
         setClients(c.data.data || []);
         setProjects(p.data.data || []);
         setVendors(v.data.data || []);
-        setCompanyLogo(s.data?.data?.logo || s.data?.logo || '');
+        setAccounts(a.data.data || []);
+        setCompany(s.data.data || null);
       })
       .catch(() => {});
   }, []);
@@ -139,7 +154,9 @@ export default function Invoices() {
       client: '',
       vendor: '',
       project: '',
-      taxRate: 0,
+      account: '',
+      paymentMethod: 'bank_transfer',
+      taxRate: company?.taxRate ?? 0,
       discountAmount: 0,
       dueDate: '',
       notes: '',
@@ -169,13 +186,12 @@ export default function Invoices() {
 
   const handleCreate = async (e) => {
     e.preventDefault();
-    const isPayable = invoiceForm.invoiceType === 'supplier' || invoiceForm.invoiceType === 'purchase';
-    if (isPayable && !invoiceForm.vendor) {
-      toast.error('Vendor is required');
+    if (!isPayableType && !invoiceForm.client) {
+      toast.error('Client is required');
       return;
     }
-    if (!isPayable && !invoiceForm.client) {
-      toast.error('Client is required');
+    if (isPayableType && !invoiceForm.vendor) {
+      toast.error('Vendor is required');
       return;
     }
     const validItems = invoiceForm.items.filter((it) => it.description?.trim());
@@ -187,9 +203,10 @@ export default function Invoices() {
     try {
       await financeAPI.createInvoice({
         invoiceType: invoiceForm.invoiceType,
-        client: isPayable ? undefined : invoiceForm.client,
-        vendor: isPayable ? invoiceForm.vendor : undefined,
+        client: !isPayableType ? invoiceForm.client : undefined,
+        vendor: isPayableType ? invoiceForm.vendor : undefined,
         project: invoiceForm.project || undefined,
+        account: invoiceForm.account || undefined,
         items: validItems.map((it) => ({
           description: it.description.trim(),
           quantity: Number(it.quantity) || 0,
@@ -218,6 +235,7 @@ export default function Invoices() {
     setPaymentForm({
       amount: String(inv.remainingBalance ?? inv.total ?? ''),
       method: 'bank_transfer',
+      account: inv.account?._id || inv.account || '',
       date: new Date().toISOString().slice(0, 10),
       reference: '',
       notes: '',
@@ -236,6 +254,7 @@ export default function Invoices() {
       await financeAPI.recordPayment(paymentTarget._id, {
         amount: Number(paymentForm.amount),
         method: paymentForm.method,
+        account: paymentForm.account || undefined,
         date: paymentForm.date,
         reference: paymentForm.reference,
         notes: paymentForm.notes,
@@ -248,6 +267,25 @@ export default function Invoices() {
     } finally {
       setPaying(false);
     }
+  };
+
+  const openView = async (inv) => {
+    setViewOpen(true);
+    setViewLoading(true);
+    try {
+      const res = await financeAPI.getInvoice(inv._id);
+      setViewInvoice(res.data.data);
+      if (res.data.company) setCompany(res.data.company);
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to load invoice');
+      setViewOpen(false);
+    } finally {
+      setViewLoading(false);
+    }
+  };
+
+  const printInvoice = () => {
+    window.print();
   };
 
   const confirmDelete = async () => {
@@ -267,8 +305,16 @@ export default function Invoices() {
 
   const columns = [
     { key: 'invoiceNumber', label: 'Invoice #' },
-    { key: 'invoiceType', label: 'Type', render: (r) => r.invoiceType || 'client' },
-    { key: 'party', label: 'Party', render: (r) => r.client?.name || r.vendor?.name || '—' },
+    {
+      key: 'invoiceType',
+      label: 'Type',
+      render: (r) => <StatusBadge status={r.invoiceType || 'client'} />,
+    },
+    {
+      key: 'party',
+      label: 'Party',
+      render: (r) => r.client?.name || r.vendor?.name || '—',
+    },
     { key: 'project', label: 'Project', render: (r) => r.project?.name || '—' },
     { key: 'issueDate', label: 'Issued', render: (r) => formatDate(r.issueDate) },
     { key: 'dueDate', label: 'Due', render: (r) => formatDate(r.dueDate) },
@@ -289,7 +335,7 @@ export default function Invoices() {
       width: '140px',
       render: (r) => (
         <div className="actions">
-          <button type="button" className="btn btn-outline btn-sm" onClick={() => setViewInvoice(r)} title="View">
+          <button type="button" className="btn btn-outline btn-sm" onClick={() => openView(r)} title="View / print">
             <Eye size={14} />
           </button>
           {r.status !== 'paid' && r.status !== 'cancelled' && (
@@ -311,7 +357,7 @@ export default function Invoices() {
     <div>
       <PageHeader
         title="Invoices"
-        subtitle="Client billing and payment collection"
+        subtitle="Client, supplier and purchase billing"
         actions={
           <>
             <Link to="/finance" className="btn btn-outline">
@@ -366,7 +412,7 @@ export default function Invoices() {
             columns={columns}
             rows={invoices}
             emptyTitle="No invoices"
-            emptyDescription="Create an invoice for a client project."
+            emptyDescription="Create an invoice for a client or vendor."
             pagination={pagination}
             onPageChange={(p) => loadInvoices(p)}
           />
@@ -392,17 +438,24 @@ export default function Invoices() {
         <form id="invoice-form" onSubmit={handleCreate}>
           <div className="form-grid" style={{ marginBottom: '1rem' }}>
             <div className="form-group">
-              <label>Invoice type</label>
+              <label>Invoice type *</label>
               <select
                 value={invoiceForm.invoiceType}
-                onChange={(e) => setInvoiceForm((f) => ({ ...f, invoiceType: e.target.value, client: '', vendor: '' }))}
+                onChange={(e) =>
+                  setInvoiceForm((f) => ({
+                    ...f,
+                    invoiceType: e.target.value,
+                    client: '',
+                    vendor: '',
+                  }))
+                }
               >
-                <option value="client">Client (receivable)</option>
-                <option value="supplier">Supplier (payable)</option>
-                <option value="purchase">Purchase (payable)</option>
+                <option value="client">Client</option>
+                <option value="supplier">Supplier</option>
+                <option value="purchase">Purchase</option>
               </select>
             </div>
-            {invoiceForm.invoiceType === 'client' ? (
+            {!isPayableType ? (
               <div className="form-group">
                 <label>Client *</label>
                 <select
@@ -445,6 +498,33 @@ export default function Invoices() {
                 {projects.map((p) => (
                   <option key={p._id} value={p._id}>
                     {p.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="form-group">
+              <label>Account</label>
+              <select
+                value={invoiceForm.account}
+                onChange={(e) => setInvoiceForm((f) => ({ ...f, account: e.target.value }))}
+              >
+                <option value="">— Default —</option>
+                {accounts.map((a) => (
+                  <option key={a._id} value={a._id}>
+                    {a.name} ({a.type})
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="form-group">
+              <label>Payment method</label>
+              <select
+                value={invoiceForm.paymentMethod}
+                onChange={(e) => setInvoiceForm((f) => ({ ...f, paymentMethod: e.target.value }))}
+              >
+                {CORE_METHODS.map((m) => (
+                  <option key={m.value} value={m.value}>
+                    {m.label}
                   </option>
                 ))}
               </select>
@@ -629,9 +709,23 @@ export default function Invoices() {
                 value={paymentForm.method}
                 onChange={(e) => setPaymentForm((f) => ({ ...f, method: e.target.value }))}
               >
-                {paymentMethods.map((m) => (
+                {CORE_METHODS.map((m) => (
                   <option key={m.value} value={m.value}>
                     {m.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="form-group">
+              <label>Account</label>
+              <select
+                value={paymentForm.account}
+                onChange={(e) => setPaymentForm((f) => ({ ...f, account: e.target.value }))}
+              >
+                <option value="">— Default —</option>
+                {accounts.map((a) => (
+                  <option key={a._id} value={a._id}>
+                    {a.name} ({a.type})
                   </option>
                 ))}
               </select>
@@ -664,58 +758,167 @@ export default function Invoices() {
       </Modal>
 
       <Modal
-        open={!!viewInvoice}
+        open={viewOpen}
         title={viewInvoice ? `Invoice ${viewInvoice.invoiceNumber}` : 'Invoice'}
         large
-        onClose={() => setViewInvoice(null)}
+        onClose={() => setViewOpen(false)}
         footer={
-          <button type="button" className="btn btn-outline" onClick={() => setViewInvoice(null)}>
-            Close
-          </button>
+          <>
+            <button type="button" className="btn btn-outline" onClick={() => setViewOpen(false)}>
+              Close
+            </button>
+            <button type="button" className="btn btn-primary" onClick={printInvoice}>
+              <Printer size={16} />
+              Print
+            </button>
+          </>
         }
       >
-        {viewInvoice && (
-          <div>
-            {companyLogo && (
-              <div style={{ marginBottom: '1rem' }}>
-                <img src={companyLogo} alt="Company logo" style={{ maxHeight: 64, objectFit: 'contain' }} />
-              </div>
-            )}
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1rem', fontSize: '0.9rem' }}>
-              <div>
-                <strong style={{ color: 'var(--olive)' }}>Bill to</strong>
-                <p style={{ margin: '0.25rem 0' }}>{viewInvoice.client?.name || viewInvoice.vendor?.name || '—'}</p>
-                <StatusBadge status={viewInvoice.status} />
+        {viewLoading || !viewInvoice ? (
+          <LoadingSpinner label="Loading invoice..." />
+        ) : (
+          <div className="invoice-print-panel" id="invoice-print-panel">
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'flex-start',
+                gap: '1.5rem',
+                marginBottom: '1.5rem',
+                paddingBottom: '1rem',
+                borderBottom: '2px solid var(--olive)',
+              }}
+            >
+              <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+                {company?.logo ? (
+                  <img
+                    src={company.logo}
+                    alt={company.companyName || 'Logo'}
+                    style={{ maxHeight: 72, maxWidth: 140, objectFit: 'contain' }}
+                  />
+                ) : null}
+                <div>
+                  <h2 style={{ margin: 0, color: 'var(--olive)', fontSize: '1.35rem' }}>
+                    {company?.companyName || 'Zar-E-Fishan'}
+                  </h2>
+                  {company?.address && (
+                    <p style={{ margin: '0.25rem 0 0', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                      {company.address}
+                    </p>
+                  )}
+                  <p style={{ margin: '0.15rem 0 0', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                    {[company?.phone, company?.email].filter(Boolean).join(' · ')}
+                  </p>
+                </div>
               </div>
               <div style={{ textAlign: 'right' }}>
-                <div>Issued: {formatDate(viewInvoice.issueDate)}</div>
-                <div>Due: {formatDate(viewInvoice.dueDate)}</div>
-                <div>Type: {viewInvoice.invoiceType || 'client'}</div>
+                <div style={{ fontSize: '1.1rem', fontWeight: 700 }}>{viewInvoice.invoiceNumber}</div>
+                <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                  <StatusBadge status={viewInvoice.invoiceType || 'client'} />{' '}
+                  <StatusBadge status={viewInvoice.status} />
+                </div>
+                <div style={{ fontSize: '0.85rem', marginTop: 6 }}>
+                  Issued {formatDate(viewInvoice.issueDate)}
+                  {viewInvoice.dueDate ? ` · Due ${formatDate(viewInvoice.dueDate)}` : ''}
+                </div>
               </div>
             </div>
-            <table className="data-table" style={{ width: '100%', fontSize: '0.9rem' }}>
-              <thead>
-                <tr>
-                  <th>Description</th>
-                  <th>Qty</th>
-                  <th>Price</th>
-                  <th>Amount</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(viewInvoice.items || []).map((it, i) => (
-                  <tr key={i}>
-                    <td>{it.description}</td>
-                    <td>{it.quantity}</td>
-                    <td>{formatCurrency(it.unitPrice)}</td>
-                    <td>{formatCurrency(it.amount ?? (Number(it.quantity) * Number(it.unitPrice)))}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            <div style={{ marginTop: '1rem', textAlign: 'right', fontWeight: 700, color: 'var(--olive)' }}>
-              Total: {formatCurrency(viewInvoice.total)} · Balance: {formatCurrency(viewInvoice.remainingBalance)}
+
+            <div className="form-grid" style={{ marginBottom: '1.25rem' }}>
+              <div>
+                <div style={{ fontSize: '0.75rem', textTransform: 'uppercase', color: 'var(--text-muted)' }}>
+                  Bill to
+                </div>
+                <strong>
+                  {viewInvoice.client?.name || viewInvoice.vendor?.name || '—'}
+                </strong>
+                {viewInvoice.project?.name && (
+                  <div style={{ fontSize: '0.85rem' }}>Project: {viewInvoice.project.name}</div>
+                )}
+              </div>
             </div>
+
+            <div className="table-wrap">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Description</th>
+                    <th>Qty</th>
+                    <th>Price</th>
+                    <th>Discount</th>
+                    <th>Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(viewInvoice.items || []).map((it, i) => (
+                    <tr key={i}>
+                      <td>{it.description}</td>
+                      <td>{it.quantity}</td>
+                      <td>{formatCurrency(it.unitPrice)}</td>
+                      <td>{formatCurrency(it.discount)}</td>
+                      <td>{formatCurrency(it.amount)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div style={{ maxWidth: 280, marginLeft: 'auto', marginTop: '1rem', fontSize: '0.9rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span>Subtotal</span>
+                <span>{formatCurrency(viewInvoice.subtotal)}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span>Discount</span>
+                <span>−{formatCurrency(viewInvoice.discountAmount)}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span>{company?.taxLabel || 'Tax'} ({viewInvoice.taxRate || 0}%)</span>
+                <span>{formatCurrency(viewInvoice.taxAmount)}</span>
+              </div>
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  fontWeight: 700,
+                  borderTop: '1px solid var(--border)',
+                  marginTop: '0.5rem',
+                  paddingTop: '0.5rem',
+                  fontSize: '1.05rem',
+                }}
+              >
+                <span>Total</span>
+                <span>{formatCurrency(viewInvoice.total)}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '0.35rem' }}>
+                <span>Paid</span>
+                <span>{formatCurrency(viewInvoice.paidAmount)}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span>Balance</span>
+                <span>{formatCurrency(viewInvoice.remainingBalance)}</span>
+              </div>
+            </div>
+
+            {viewInvoice.notes && (
+              <p style={{ marginTop: '1.25rem', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                Notes: {viewInvoice.notes}
+              </p>
+            )}
+            {company?.invoiceFooter && (
+              <p
+                style={{
+                  marginTop: '1.5rem',
+                  textAlign: 'center',
+                  fontSize: '0.85rem',
+                  color: 'var(--olive)',
+                  borderTop: '1px dashed var(--border)',
+                  paddingTop: '0.75rem',
+                }}
+              >
+                {company.invoiceFooter}
+              </p>
+            )}
           </div>
         )}
       </Modal>

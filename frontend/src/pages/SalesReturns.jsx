@@ -87,7 +87,12 @@ export default function SalesReturns() {
     { key: 'returnNumber', label: 'Return #' },
     { key: 'client', label: 'Client', render: (r) => r.client?.name || '—' },
     { key: 'invoice', label: 'Invoice', render: (r) => r.invoice?.invoiceNumber || '—' },
-    { key: 'total', label: 'Refund', render: (r) => formatCurrency(r.total) },
+    { key: 'total', label: 'Amount', render: (r) => formatCurrency(r.total) },
+    {
+      key: 'reason',
+      label: 'Reason',
+      render: (r) => r.reason || '—',
+    },
     { key: 'status', label: 'Status', render: (r) => <StatusBadge status={r.status} /> },
     { key: 'createdAt', label: 'Date', render: (r) => formatDate(r.createdAt) },
   ];

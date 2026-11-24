@@ -9,9 +9,25 @@ import ConfirmDialog from '../components/common/ConfirmDialog';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import { formatCurrency, formatDate, paymentMethods } from '../utils/format';
 
+const EXPENSE_CATEGORIES = [
+  'utilities',
+  'bills',
+  'rent',
+  'salaries',
+  'office',
+  'transport',
+  'marketing',
+  'maintenance',
+  'other',
+];
+
+const CORE_METHODS = paymentMethods.filter((m) =>
+  ['cash', 'card', 'bank_transfer'].includes(m.value),
+);
+
 const emptyForm = () => ({
   title: '',
-  category: 'other',
+  category: 'utilities',
   amount: '',
   date: new Date().toISOString().slice(0, 10),
   paymentMethod: 'cash',
@@ -133,7 +149,12 @@ export default function Expenses() {
       />
       <div className="card">
         <div className="toolbar">
-          <input className="search-input" placeholder="Filter category" value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} />
+          <select className="filter-select" value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}>
+            <option value="">All categories</option>
+            {EXPENSE_CATEGORIES.map((c) => (
+              <option key={c} value={c}>{c}</option>
+            ))}
+          </select>
         </div>
         {loading ? <LoadingSpinner label="Loading expenses..." /> : (
           <DataTable columns={columns} rows={rows} emptyTitle="No expenses" pagination={pagination} onPageChange={load} />
@@ -163,7 +184,11 @@ export default function Expenses() {
             </div>
             <div className="form-group">
               <label>Category</label>
-              <input value={form.category} onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))} />
+              <select value={form.category} onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}>
+                {EXPENSE_CATEGORIES.map((c) => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
             </div>
             <div className="form-group">
               <label>Date</label>
@@ -172,7 +197,7 @@ export default function Expenses() {
             <div className="form-group">
               <label>Payment method</label>
               <select value={form.paymentMethod} onChange={(e) => setForm((f) => ({ ...f, paymentMethod: e.target.value }))}>
-                {paymentMethods.map((m) => (
+                {CORE_METHODS.map((m) => (
                   <option key={m.value} value={m.value}>{m.label}</option>
                 ))}
               </select>
