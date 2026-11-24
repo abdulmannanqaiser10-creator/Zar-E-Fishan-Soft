@@ -23,7 +23,6 @@ import Vendors from './pages/Vendors';
 import VendorDetail from './pages/VendorDetail';
 import Reports from './pages/Reports';
 import Settings from './pages/Settings';
-import Website from './pages/Website';
 
 function ProtectedRoute({ children }) {
   const { isAuthenticated, loading } = useAuth();
@@ -63,7 +62,6 @@ export default function App() {
         <Route path="vendors" element={<Vendors />} />
         <Route path="vendors/:id" element={<VendorDetail />} />
         <Route path="reports" element={<Reports />} />
-        <Route path="website" element={<Website />} />
         <Route path="settings" element={<Settings />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

@@ -125,16 +125,4 @@ export const erpAPI = {
   pendingPayments: () => api.get('/erp/pending-payments'),
   cashFlow: (p) => api.get('/erp/reports/cash-flow', { params: p }),
   balanceSheet: () => api.get('/erp/reports/balance-sheet'),
-  blogs: () => api.get('/erp/website/blogs'),
-  saveBlog: (d, id) => (id ? api.put(`/erp/website/blogs/${id}`, d) : api.post('/erp/website/blogs', d)),
-  deleteBlog: (id) => api.delete(`/erp/website/blogs/${id}`),
-  websiteBudgets: () => api.get('/erp/website/budgets'),
-  saveWebsiteBudget: (d, id) =>
-    id ? api.put(`/erp/website/budgets/${id}`, d) : api.post('/erp/website/budgets', d),
-  deleteWebsiteBudget: (id) => api.delete(`/erp/website/budgets/${id}`),
-  websiteProjects: () => api.get('/erp/website/projects'),
-  saveWebsiteProject: (d, id) =>
-    id ? api.put(`/erp/website/projects/${id}`, d) : api.post('/erp/website/projects', d),
-  deleteWebsiteProject: (id) => api.delete(`/erp/website/projects/${id}`),
-  updateFonts: (d) => api.put('/erp/website/fonts', d),
 };

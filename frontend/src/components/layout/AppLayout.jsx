@@ -16,7 +16,6 @@ const titles = {
   '/finance/ledger': 'Ledger',
   '/finance/returns': 'Sales Returns',
   '/finance/pending': 'Pending Payments',
-  '/website': 'Website Module',
   '/inventory': 'Inventory',
   '/procurement': 'Procurement',
   '/vendors': 'Vendors',

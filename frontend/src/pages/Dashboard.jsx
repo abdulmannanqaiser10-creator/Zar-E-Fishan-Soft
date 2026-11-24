@@ -71,7 +71,7 @@ export default function Dashboard() {
               Interior Design Operations
             </p>
             <h1>Welcome back to Zar-E-Fishan</h1>
-            <p>Track projects, cash flow, CRM pipeline and inventory from one premium workspace.</p>
+            <p>Track projects, cash flow, CRM pipeline and operations from one clean workspace.</p>
           </div>
           <div className="dash-hero-actions">
             <Link to="/projects" className="btn btn-gold">

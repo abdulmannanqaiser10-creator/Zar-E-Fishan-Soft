@@ -3,8 +3,6 @@ import Account from '../models/Account.js';
 import GeneralExpense from '../models/GeneralExpense.js';
 import LedgerEntry from '../models/LedgerEntry.js';
 import SalesReturn from '../models/SalesReturn.js';
-import Blog from '../models/Blog.js';
-import { WebsiteBudget, WebsiteProject } from '../models/WebsiteContent.js';
 import Invoice from '../models/Invoice.js';
 import Transaction from '../models/Transaction.js';
 import Client from '../models/Client.js';
@@ -487,100 +485,4 @@ export const balanceSheet = asyncHandler(async (req, res) => {
       accounts,
     },
   });
-});
-
-/* ---------- Website module ---------- */
-export const listBlogs = asyncHandler(async (req, res) => {
-  const data = await Blog.find().sort({ createdAt: -1 }).populate('author', 'name');
-  res.json({ success: true, data });
-});
-
-export const saveBlog = asyncHandler(async (req, res) => {
-  const { title, content, excerpt, coverImage, status, tags } = req.body;
-  if (!title) throw new AppError('Title is required', 400);
-  const slug = (req.body.slug || title).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
-  let blog;
-  if (req.params.id) {
-    blog = await Blog.findById(req.params.id);
-    if (!blog) throw new AppError('Blog not found', 404);
-    Object.assign(blog, { title, slug, content, excerpt, coverImage, status, tags });
-    if (status === 'published' && !blog.publishedAt) blog.publishedAt = new Date();
-    await blog.save();
-  } else {
-    blog = await Blog.create({
-      title, slug, content, excerpt, coverImage,
-      status: status || 'draft', tags,
-      publishedAt: status === 'published' ? new Date() : undefined,
-      author: req.user._id,
-    });
-  }
-  res.status(req.params.id ? 200 : 201).json({ success: true, data: blog });
-});
-
-export const deleteBlog = asyncHandler(async (req, res) => {
-  await Blog.findByIdAndDelete(req.params.id);
-  res.json({ success: true, message: 'Blog deleted' });
-});
-
-export const listWebsiteBudgets = asyncHandler(async (req, res) => {
-  const data = await WebsiteBudget.find().sort({ createdAt: -1 });
-  res.json({ success: true, data });
-});
-
-export const saveWebsiteBudget = asyncHandler(async (req, res) => {
-  const { title, category, allocated, spent, period, notes } = req.body;
-  if (!title || allocated == null) throw new AppError('Title and allocated amount required', 400);
-  let doc;
-  if (req.params.id) {
-    doc = await WebsiteBudget.findByIdAndUpdate(req.params.id, {
-      title, category, allocated: ensureNonNegative(allocated), spent: ensureNonNegative(spent || 0), period, notes,
-    }, { new: true });
-  } else {
-    doc = await WebsiteBudget.create({
-      title, category, allocated: ensureNonNegative(allocated), spent: ensureNonNegative(spent || 0), period, notes,
-    });
-  }
-  res.status(req.params.id ? 200 : 201).json({ success: true, data: doc });
-});
-
-export const deleteWebsiteBudget = asyncHandler(async (req, res) => {
-  await WebsiteBudget.findByIdAndDelete(req.params.id);
-  res.json({ success: true, message: 'Budget deleted' });
-});
-
-export const listWebsiteProjects = asyncHandler(async (req, res) => {
-  const data = await WebsiteProject.find().populate('linkedProject', 'name projectId').sort({ sortOrder: 1, createdAt: -1 });
-  res.json({ success: true, data });
-});
-
-export const saveWebsiteProject = asyncHandler(async (req, res) => {
-  const { title, description, coverImage, gallery, linkedProject, status, featured, sortOrder } = req.body;
-  if (!title) throw new AppError('Title is required', 400);
-  const slug = (req.body.slug || title).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
-  let doc;
-  if (req.params.id) {
-    doc = await WebsiteProject.findByIdAndUpdate(req.params.id, {
-      title, slug, description, coverImage, gallery, linkedProject, status, featured, sortOrder,
-    }, { new: true });
-  } else {
-    doc = await WebsiteProject.create({
-      title, slug, description, coverImage, gallery, linkedProject,
-      status: status || 'draft', featured: !!featured, sortOrder: sortOrder || 0,
-    });
-  }
-  res.status(req.params.id ? 200 : 201).json({ success: true, data: doc });
-});
-
-export const deleteWebsiteProject = asyncHandler(async (req, res) => {
-  await WebsiteProject.findByIdAndDelete(req.params.id);
-  res.json({ success: true, message: 'Website project deleted' });
-});
-
-export const updateFonts = asyncHandler(async (req, res) => {
-  let settings = await Settings.findOne();
-  if (!settings) settings = await Settings.create({});
-  settings.fonts = { ...(settings.fonts?.toObject?.() || settings.fonts || {}), ...req.body.fonts };
-  if (req.body.logo !== undefined) settings.logo = req.body.logo;
-  await settings.save();
-  res.json({ success: true, data: settings });
 });

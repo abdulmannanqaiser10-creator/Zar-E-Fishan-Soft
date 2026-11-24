@@ -20,7 +20,6 @@ import {
   TrendingUp,
   Scale,
   LineChart,
-  Globe,
   Settings,
   ChevronLeft,
   ChevronRight,
@@ -79,7 +78,6 @@ const NAV = [
       { to: '/reports?type=balanceSheet', label: 'Balance Sheet', icon: Scale },
     ],
   },
-  { type: 'link', to: '/website', label: 'Website', icon: Globe },
   { type: 'link', to: '/settings', label: 'Settings', icon: Settings },
 ]
 
@@ -219,8 +217,8 @@ export default function Sidebar({ open, onClose, collapsed, onToggleCollapse }) 
       {!collapsed && (
         <div className="sidebar-footer">
           <div className="sidebar-footer-card">
-            <strong>Premium ERP</strong>
-            <span>Projects · Finance · CRM</span>
+            <strong>Zar-E-Fishan ERP</strong>
+            <span>CRM · Projects · Finance · Reports</span>
           </div>
         </div>
       )}
